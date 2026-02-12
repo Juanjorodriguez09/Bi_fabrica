@@ -1,0 +1,145 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model event {
+  id          BigInt      @id @default(autoincrement())
+  site_id     Int
+  session_id  BigInt
+  visitor_id  BigInt
+  event_uuid  String      @db.Uuid
+  event_type  String      @db.VarChar(50)
+  page_url    String
+  page_path   String?     @db.VarChar(500)
+  page_title  String?     @db.VarChar(500)
+  referrer    String?
+  meta_data   Json?
+  occurred_at DateTime    @db.Timestamptz(6)
+  created_at  DateTime    @default(now()) @db.Timestamptz(6)
+  session     session     @relation(fields: [session_id], references: [id])
+  site_config site_config @relation(fields: [site_id], references: [id])
+  visitor     visitor     @relation(fields: [visitor_id], references: [id])
+
+  @@unique([site_id, event_uuid])
+  @@index([event_type])
+  @@index([session_id])
+  @@index([site_id, occurred_at])
+  @@index([visitor_id])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model geo_cache {
+  id           BigInt   @id @default(autoincrement())
+  ip_address   String   @unique @db.Inet
+  country_code String?  @db.Char(2)
+  country_name String?  @db.VarChar(100)
+  city         String?  @db.VarChar(100)
+  region       String?  @db.VarChar(100)
+  expires_at   DateTime @db.Timestamptz(6)
+  hit_count    Int      @default(0)
+  created_at   DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([expires_at])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model identified_user {
+  id                    BigInt   @id @default(autoincrement())
+  visitor_id            BigInt   @unique
+  customer_id_ref       Int?
+  email                 String?  @db.VarChar(255)
+  phone                 String?  @db.VarChar(50)
+  full_name             String?  @db.VarChar(255)
+  identified_at         DateTime @default(now()) @db.Timestamptz(6)
+  identification_method String?  @db.VarChar(50)
+  created_at            DateTime @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime @db.Timestamptz(6)
+  visitor               visitor  @relation(fields: [visitor_id], references: [id])
+
+  @@index([customer_id_ref])
+  @@index([email])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model session {
+  id                   BigInt      @id @default(autoincrement())
+  site_id              Int
+  visitor_id           BigInt
+  session_uuid         String      @db.Uuid
+  landing_id           String?     @db.VarChar(255)
+  started_at           DateTime    @default(now()) @db.Timestamptz(6)
+  last_activity_at     DateTime?   @db.Timestamptz(6)
+  utm_source           String?     @db.VarChar(255)
+  utm_medium           String?     @db.VarChar(255)
+  utm_campaign         String?     @db.VarChar(255)
+  utm_content          String?     @db.VarChar(255)
+  utm_term             String?     @db.VarChar(255)
+  browser              String?     @db.VarChar(100)
+  browser_version      String?     @db.VarChar(50)
+  os                   String?     @db.VarChar(100)
+  ip_address           String?     @db.Inet
+  user_agent           String?
+  referrer             String?
+  pageviews_count      Int         @default(0)
+  created_at           DateTime    @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime    @db.Timestamptz(6)
+  dclid                String?     @db.VarChar(255)
+  fbclid               String?     @db.VarChar(255)
+  gclid                String?     @db.VarChar(255)
+  li_fat_id            String?     @db.VarChar(255)
+  msclkid              String?     @db.VarChar(255)
+  ttclid               String?     @db.VarChar(255)
+  twclid               String?     @db.VarChar(255)
+  utm_creative_format  String?     @db.VarChar(100)
+  utm_id               String?     @db.VarChar(255)
+  utm_marketing_tactic String?     @db.VarChar(100)
+  utm_source_platform  String?     @db.VarChar(100)
+  event                event[]
+  site_config          site_config @relation(fields: [site_id], references: [id])
+  visitor              visitor     @relation(fields: [visitor_id], references: [id])
+
+  @@unique([site_id, session_uuid])
+  @@index([site_id, started_at])
+  @@index([visitor_id])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model site_config {
+  id             Int       @id @default(autoincrement())
+  site_id_ref    Int?
+  company_id_ref Int
+  api_key        String    @unique @db.VarChar(255)
+  domain         String    @unique @db.VarChar(255)
+  is_active      Boolean   @default(true)
+  created_at     DateTime  @default(now()) @db.Timestamptz(6)
+  event          event[]
+  session        session[]
+  visitor        visitor[]
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model visitor {
+  id              BigInt           @id @default(autoincrement())
+  site_id         Int
+  visitor_uuid    String           @db.Uuid
+  first_seen_at   DateTime         @default(now()) @db.Timestamptz(6)
+  last_seen_at    DateTime?        @db.Timestamptz(6)
+  device_type     String?          @db.VarChar(20)
+  country_code    String?          @db.Char(2)
+  total_pageviews Int              @default(0)
+  created_at      DateTime         @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime         @db.Timestamptz(6)
+  event           event[]
+  identified_user identified_user?
+  session         session[]
+  site_config     site_config      @relation(fields: [site_id], references: [id])
+
+  @@unique([site_id, visitor_uuid])
+  @@index([site_id, last_seen_at])
+}

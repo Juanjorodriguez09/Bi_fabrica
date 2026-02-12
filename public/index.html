@@ -1,0 +1,1324 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MiComercio Analytics - Dashboard</title>
+  <link rel="stylesheet" href="styles.css?v=8">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+</head>
+<body>
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="logo">
+        <span class="logo-mi">mi</span><span class="logo-comercio">comercio</span>
+      </div>
+      <button class="btn-collapse-sidebar" id="btn-collapse-sidebar" title="Colapsar menu">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M11 17l-5-5 5-5M18 17l-5-5 5-5"/>
+        </svg>
+      </button>
+    </div>
+    <nav class="sidebar-nav">
+      <ul class="nav-list">
+        <li class="nav-item">
+          <a href="#" class="nav-link active" data-section="resumen">
+            <svg class="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="7" height="7"/>
+              <rect x="14" y="3" width="7" height="7"/>
+              <rect x="14" y="14" width="7" height="7"/>
+              <rect x="3" y="14" width="7" height="7"/>
+            </svg>
+            <span class="nav-text">Resumen</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="#" class="nav-link" data-section="realtime">
+            <svg class="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <polyline points="12 6 12 12 16 14"/>
+            </svg>
+            <span class="nav-text">Tiempo Real</span>
+            <span class="nav-badge realtime-nav-badge" id="realtime-nav-badge">0</span>
+          </a>
+        </li>
+        <li class="nav-item has-submenu">
+          <a href="#" class="nav-link nav-parent" data-toggle="adquisicion">
+            <svg class="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+              <circle cx="8.5" cy="7" r="4"/>
+              <line x1="20" y1="8" x2="20" y2="14"/>
+              <line x1="23" y1="11" x2="17" y2="11"/>
+            </svg>
+            <span class="nav-text">Adquisicion</span>
+            <svg class="nav-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </a>
+          <ul class="nav-submenu" id="submenu-adquisicion">
+            <li><a href="#" class="nav-link" data-section="sources">Fuentes de trafico</a></li>
+            <li><a href="#" class="nav-link" data-section="utms">Campanas UTM</a></li>
+          </ul>
+        </li>
+        <li class="nav-item has-submenu">
+          <a href="#" class="nav-link nav-parent" data-toggle="interaccion">
+            <svg class="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="16" y1="13" x2="8" y2="13"/>
+              <line x1="16" y1="17" x2="8" y2="17"/>
+            </svg>
+            <span class="nav-text">Interaccion</span>
+            <svg class="nav-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </a>
+          <ul class="nav-submenu" id="submenu-interaccion">
+            <li><a href="#" class="nav-link" data-section="pages">Paginas</a></li>
+            <li><a href="#" class="nav-link" data-section="events">Eventos</a></li>
+            <li><a href="#" class="nav-link" data-section="clicks">Clicks</a></li>
+          </ul>
+        </li>
+        <li class="nav-item has-submenu">
+          <a href="#" class="nav-link nav-parent" data-toggle="audiencia">
+            <svg class="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+              <circle cx="9" cy="7" r="4"/>
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+              <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+            </svg>
+            <span class="nav-text">Audiencia</span>
+            <svg class="nav-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </a>
+          <ul class="nav-submenu" id="submenu-audiencia">
+            <li><a href="#" class="nav-link" data-section="location">Ubicacion</a></li>
+            <li><a href="#" class="nav-link" data-section="devices">Dispositivos</a></li>
+            <li><a href="#" class="nav-link" data-section="browsers">Navegadores</a></li>
+          </ul>
+        </li>
+        <li class="nav-item nav-item-settings">
+          <a href="#" class="nav-link" data-section="settings">
+            <svg class="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
+            <span class="nav-text">Configuracion</span>
+          </a>
+        </li>
+      </ul>
+    </nav>
+  </aside>
+
+  <!-- Main Wrapper -->
+  <div class="main-wrapper" id="main-wrapper">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-left">
+        <button class="btn-menu-mobile" id="btn-menu-mobile" title="Menu">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="3" y1="12" x2="21" y2="12"/>
+            <line x1="3" y1="6" x2="21" y2="6"/>
+            <line x1="3" y1="18" x2="21" y2="18"/>
+          </svg>
+        </button>
+        <span class="header-title" id="header-title">Resumen</span>
+      </div>
+      <div class="header-right">
+        <!-- Dark Mode Toggle -->
+        <button class="btn-theme-toggle" id="btn-theme-toggle" title="Cambiar tema">
+          <svg class="icon-sun" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="5"/>
+            <line x1="12" y1="1" x2="12" y2="3"/>
+            <line x1="12" y1="21" x2="12" y2="23"/>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+            <line x1="1" y1="12" x2="3" y2="12"/>
+            <line x1="21" y1="12" x2="23" y2="12"/>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+          </svg>
+          <svg class="icon-moon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+          </svg>
+        </button>
+        <!-- Alerts Badge -->
+        <div class="alerts-container">
+          <button class="btn-alerts" id="btn-alerts" title="Alertas">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+              <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+            </svg>
+            <span class="alerts-badge" id="alerts-badge" style="display:none;">0</span>
+          </button>
+          <div class="alerts-dropdown" id="alerts-dropdown" style="display:none;">
+            <div class="alerts-header">
+              <h4>Alertas Activas</h4>
+              <button class="btn-alerts-settings" id="btn-alerts-settings" title="Configurar alertas">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="3"/>
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                </svg>
+              </button>
+            </div>
+            <div class="alerts-list" id="alerts-list">
+              <p class="alerts-empty">No hay alertas activas</p>
+            </div>
+          </div>
+        </div>
+        <div class="realtime-badge" id="realtime-badge">
+          <span class="realtime-dot"></span>
+          <span id="realtime-count">0</span> en linea
+        </div>
+      </div>
+    </header>
+
+    <!-- Global Filters Bar -->
+    <div class="filters-bar" id="filters-bar">
+      <div class="filters-row filters-row-main">
+        <div class="filter-group">
+          <label for="site-select">Sitio</label>
+          <select id="site-select" class="filter-select">
+            <option value="">Cargando...</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label for="date-range">Periodo</label>
+          <select id="date-range" class="filter-select">
+            <option value="today">Hoy</option>
+            <option value="yesterday">Ayer</option>
+            <option value="7days" selected>Ultimos 7 dias</option>
+            <option value="30days">Ultimos 30 dias</option>
+            <option value="90days">Ultimos 90 dias</option>
+            <option value="custom">Personalizado</option>
+          </select>
+        </div>
+        <div class="filter-group custom-dates" id="custom-dates" style="display: none;">
+          <input type="date" id="start-date" class="filter-input">
+          <span>a</span>
+          <input type="date" id="end-date" class="filter-input">
+        </div>
+        <div class="filter-group">
+          <label for="compare-toggle">Comparar</label>
+          <select id="compare-toggle" class="filter-select filter-select-sm">
+            <option value="none">No comparar</option>
+            <option value="previous">Periodo anterior</option>
+          </select>
+        </div>
+        <button class="btn-toggle-filters" id="btn-toggle-filters" title="Mas filtros">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="4" y1="21" x2="4" y2="14"/>
+            <line x1="4" y1="10" x2="4" y2="3"/>
+            <line x1="12" y1="21" x2="12" y2="12"/>
+            <line x1="12" y1="8" x2="12" y2="3"/>
+            <line x1="20" y1="21" x2="20" y2="16"/>
+            <line x1="20" y1="12" x2="20" y2="3"/>
+            <line x1="1" y1="14" x2="7" y2="14"/>
+            <line x1="9" y1="8" x2="15" y2="8"/>
+            <line x1="17" y1="16" x2="23" y2="16"/>
+          </svg>
+          <span>Filtros</span>
+        </button>
+        <div class="filter-actions">
+          <button class="btn-refresh" id="btn-refresh" title="Actualizar datos">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+            </svg>
+          </button>
+          <div class="export-dropdown-container">
+            <button class="btn-export" id="btn-export" title="Exportar datos">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              <span>Exportar</span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </button>
+            <div class="export-dropdown" id="export-dropdown" style="display:none;">
+              <button class="export-option" data-format="excel">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                </svg>
+                Excel (.xls)
+              </button>
+              <button class="export-option" data-format="csv">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                  <line x1="8" y1="13" x2="16" y2="13"/>
+                  <line x1="8" y1="17" x2="16" y2="17"/>
+                </svg>
+                CSV (.csv)
+              </button>
+              <button class="export-option" data-format="pdf">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                  <text x="8" y="18" font-size="6" fill="currentColor">PDF</text>
+                </svg>
+                PDF (.pdf)
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="filters-row filters-row-advanced" id="advanced-filters" style="display: none;">
+        <div class="filter-group">
+          <label for="filter-device">Dispositivo</label>
+          <select id="filter-device" class="filter-select filter-select-sm">
+            <option value="">Todos</option>
+            <option value="desktop">Desktop</option>
+            <option value="mobile">Movil</option>
+            <option value="tablet">Tablet</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label for="filter-browser">Navegador</label>
+          <select id="filter-browser" class="filter-select filter-select-sm">
+            <option value="">Todos</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label for="filter-country">Pais</label>
+          <select id="filter-country" class="filter-select filter-select-sm">
+            <option value="">Todos</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label for="filter-source">Fuente</label>
+          <select id="filter-source" class="filter-select filter-select-sm">
+            <option value="">Todas</option>
+            <option value="direct">Directo</option>
+            <option value="organic">Organico</option>
+            <option value="referral">Referido</option>
+            <option value="social">Social</option>
+            <option value="paid">Pagado</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label for="filter-utm-campaign">Campana UTM</label>
+          <select id="filter-utm-campaign" class="filter-select filter-select-sm">
+            <option value="">Todas</option>
+          </select>
+        </div>
+        <button class="btn-clear-filters" id="btn-clear-filters">Limpiar filtros</button>
+      </div>
+    </div>
+
+    <!-- Main Content - Dynamic sections -->
+    <main class="main-content" id="main-content">
+      <!-- Section: Resumen (default) -->
+      <section class="content-section" id="section-resumen">
+        <!-- Summary Cards -->
+        <div class="summary-cards">
+          <div class="card summary-card" data-metric="pageviews">
+            <div class="card-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                <circle cx="12" cy="12" r="3"/>
+              </svg>
+            </div>
+            <div class="card-content">
+              <span class="card-value" id="metric-pageviews">-</span>
+              <span class="card-label">Pageviews</span>
+            </div>
+          </div>
+
+          <div class="card summary-card" data-metric="sessions">
+            <div class="card-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                <line x1="3" y1="9" x2="21" y2="9"/>
+              </svg>
+            </div>
+            <div class="card-content">
+              <span class="card-value" id="metric-sessions">-</span>
+              <span class="card-label">Sesiones</span>
+            </div>
+          </div>
+
+          <div class="card summary-card" data-metric="visitors">
+            <div class="card-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                <circle cx="9" cy="7" r="4"/>
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+              </svg>
+            </div>
+            <div class="card-content">
+              <span class="card-value" id="metric-visitors">-</span>
+              <span class="card-label">Visitantes</span>
+            </div>
+          </div>
+
+          <div class="card summary-card" data-metric="bounce">
+            <div class="card-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
+                <polyline points="17 6 23 6 23 12"/>
+              </svg>
+            </div>
+            <div class="card-content">
+              <span class="card-value" id="metric-bounce">-</span>
+              <span class="card-label">Rebote</span>
+            </div>
+          </div>
+
+          <div class="card summary-card" data-metric="duration">
+            <div class="card-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <polyline points="12 6 12 12 16 14"/>
+              </svg>
+            </div>
+            <div class="card-content">
+              <span class="card-value" id="metric-duration">-</span>
+              <span class="card-label">Duracion</span>
+            </div>
+          </div>
+
+          <div class="card summary-card" data-metric="pages-session">
+            <div class="card-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+                <line x1="16" y1="13" x2="8" y2="13"/>
+                <line x1="16" y1="17" x2="8" y2="17"/>
+              </svg>
+            </div>
+            <div class="card-content">
+              <span class="card-value" id="metric-pages-session">-</span>
+              <span class="card-label">Pags/Sesion</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Trend Chart - Full Width -->
+        <div class="card chart-card trend-card collapsible" data-section-id="trend">
+          <div class="card-header" data-collapse-toggle>
+            <h3>Tendencia de Trafico</h3>
+            <div class="card-actions">
+              <button class="btn-toggle-table" data-chart="trend" title="Ver tabla">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                  <line x1="3" y1="9" x2="21" y2="9"/>
+                  <line x1="3" y1="15" x2="21" y2="15"/>
+                  <line x1="9" y1="3" x2="9" y2="21"/>
+                </svg>
+              </button>
+              <button class="btn-annotations" id="btn-annotations" title="Ver anotaciones">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                </svg>
+              </button>
+              <button class="btn-add-annotation" id="btn-add-annotation" title="Agregar anotacion">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="12" y1="5" x2="12" y2="19"/>
+                  <line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+              </button>
+              <select id="filter-trend-metric" class="card-filter-select">
+                <option value="all">Todas las metricas</option>
+                <option value="pageviews">Pageviews</option>
+                <option value="sessions">Sesiones</option>
+                <option value="visitors">Visitantes</option>
+              </select>
+              <select id="filter-trend-type" class="card-filter-select">
+                <option value="line">Lineas</option>
+                <option value="bar">Barras</option>
+                <option value="area">Area</option>
+              </select>
+            </div>
+          </div>
+          <div class="chart-container trend-container">
+            <canvas id="chart-trend"></canvas>
+          </div>
+          <div class="chart-table-container" id="table-chart-trend" style="display:none">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th class="num">Pageviews</th>
+                  <th class="num">Sesiones</th>
+                  <th class="num">Visitantes</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div class="chart-loading" id="loading-trend">Cargando...</div>
+        </div>
+
+        <!-- Two Column Charts -->
+        <div class="charts-row">
+          <div class="card chart-card collapsible" data-section-id="events-chart">
+            <div class="card-header" data-collapse-toggle>
+              <h3>Tipos de Eventos</h3>
+              <div class="card-actions">
+                <button class="btn-toggle-table" data-chart="events" title="Ver tabla">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                    <line x1="3" y1="9" x2="21" y2="9"/>
+                    <line x1="3" y1="15" x2="21" y2="15"/>
+                    <line x1="9" y1="3" x2="9" y2="21"/>
+                  </svg>
+                </button>
+                <select id="filter-events-type" class="card-filter-select">
+                  <option value="pie">Pastel</option>
+                  <option value="bar">Barras</option>
+                  <option value="line">Linea</option>
+                </select>
+              </div>
+            </div>
+            <div class="chart-container">
+              <canvas id="chart-events"></canvas>
+            </div>
+            <div class="chart-table-container" id="table-chart-events" style="display:none">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Tipo</th>
+                    <th class="num">Cantidad</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <div class="chart-loading" id="loading-events">Cargando...</div>
+          </div>
+
+          <div class="card chart-card collapsible" data-section-id="devices-chart">
+            <div class="card-header" data-collapse-toggle>
+              <h3>Dispositivos</h3>
+              <div class="card-actions">
+                <button class="btn-toggle-table" data-chart="devices" title="Ver tabla">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                    <line x1="3" y1="9" x2="21" y2="9"/>
+                    <line x1="3" y1="15" x2="21" y2="15"/>
+                    <line x1="9" y1="3" x2="9" y2="21"/>
+                  </svg>
+                </button>
+                <select id="filter-devices-type" class="card-filter-select">
+                  <option value="pie">Pastel</option>
+                  <option value="bar">Barras</option>
+                  <option value="line">Linea</option>
+                </select>
+              </div>
+            </div>
+            <div class="chart-container">
+              <canvas id="chart-devices"></canvas>
+            </div>
+            <div class="chart-table-container" id="table-chart-devices" style="display:none">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Dispositivo</th>
+                    <th class="num">Sesiones</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <div class="chart-loading" id="loading-devices">Cargando...</div>
+          </div>
+        </div>
+
+        <!-- Tables Row -->
+        <div class="tables-row">
+          <div class="card table-card collapsible" data-section-id="pages-table">
+            <div class="card-header" data-collapse-toggle>
+              <h3>Top Paginas</h3>
+              <div class="card-filters">
+                <select id="filter-pages-limit" class="card-filter-select">
+                  <option value="5">Top 5</option>
+                  <option value="10" selected>Top 10</option>
+                  <option value="20">Top 20</option>
+                </select>
+              </div>
+            </div>
+            <div class="table-container">
+              <table class="data-table" id="table-pages">
+                <thead>
+                  <tr>
+                    <th>Pagina</th>
+                    <th class="num">Vistas</th>
+                    <th class="num">Unicos</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <div class="table-loading" id="loading-pages">Cargando...</div>
+          </div>
+
+          <div class="card table-card collapsible" data-section-id="clicks-table">
+            <div class="card-header" data-collapse-toggle>
+              <h3>Top Clicks</h3>
+              <div class="card-filters">
+                <select id="filter-clicks-limit" class="card-filter-select">
+                  <option value="5">Top 5</option>
+                  <option value="10" selected>Top 10</option>
+                  <option value="20">Top 20</option>
+                </select>
+              </div>
+            </div>
+            <div class="table-container">
+              <table class="data-table" id="table-clicks">
+                <thead>
+                  <tr>
+                    <th>Elemento</th>
+                    <th class="num">Clicks</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <div class="table-loading" id="loading-clicks">Cargando...</div>
+          </div>
+
+          <div class="card table-card collapsible" data-section-id="referrers-table">
+            <div class="card-header" data-collapse-toggle>
+              <h3>Fuentes de Trafico</h3>
+              <div class="card-filters">
+                <select id="filter-referrers-limit" class="card-filter-select">
+                  <option value="5">Top 5</option>
+                  <option value="10" selected>Top 10</option>
+                  <option value="20">Top 20</option>
+                </select>
+              </div>
+            </div>
+            <div class="table-container">
+              <table class="data-table" id="table-referrers">
+                <thead>
+                  <tr>
+                    <th>Origen</th>
+                    <th class="num">Sesiones</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <div class="table-loading" id="loading-referrers">Cargando...</div>
+          </div>
+        </div>
+
+        <!-- Heatmap Row -->
+        <div class="heatmap-row">
+          <div class="card chart-card collapsible" data-section-id="heatmap-chart">
+            <div class="card-header" data-collapse-toggle>
+              <h3>Mapa de Calor - Trafico por Hora y Dia</h3>
+              <div class="card-actions">
+                <select id="filter-heatmap-metric" class="card-filter-select">
+                  <option value="pageviews">Pageviews</option>
+                  <option value="visitors">Visitantes</option>
+                </select>
+              </div>
+            </div>
+            <div class="card-body collapsible-content">
+              <div class="heatmap-container" id="heatmap-container">
+                <!-- Heatmap will be rendered here -->
+              </div>
+            </div>
+            <div class="chart-loading" id="loading-heatmap">Cargando...</div>
+          </div>
+        </div>
+
+        <!-- Distribution Row -->
+        <div class="distribution-row">
+          <div class="card chart-card small collapsible" data-section-id="browsers-chart">
+            <div class="card-header" data-collapse-toggle>
+              <h3>Navegadores</h3>
+              <div class="card-actions">
+                <button class="btn-toggle-table" data-chart="browsers" title="Ver tabla">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                    <line x1="3" y1="9" x2="21" y2="9"/>
+                    <line x1="3" y1="15" x2="21" y2="15"/>
+                    <line x1="9" y1="3" x2="9" y2="21"/>
+                  </svg>
+                </button>
+                <select id="filter-browsers-type" class="card-filter-select">
+                  <option value="pie">Pastel</option>
+                  <option value="bar">Barras</option>
+                  <option value="line">Linea</option>
+                </select>
+              </div>
+            </div>
+            <div class="chart-container">
+              <canvas id="chart-browsers"></canvas>
+            </div>
+            <div class="chart-table-container" id="table-chart-browsers" style="display:none">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Navegador</th>
+                    <th class="num">Sesiones</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <div class="chart-loading" id="loading-browsers">Cargando...</div>
+          </div>
+
+          <div class="card chart-card small collapsible" data-section-id="scroll-chart">
+            <div class="card-header" data-collapse-toggle>
+              <h3>Scroll Depth</h3>
+              <div class="card-actions">
+                <button class="btn-toggle-table" data-chart="scroll" title="Ver tabla">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                    <line x1="3" y1="9" x2="21" y2="9"/>
+                    <line x1="3" y1="15" x2="21" y2="15"/>
+                    <line x1="9" y1="3" x2="9" y2="21"/>
+                  </svg>
+                </button>
+                <select id="filter-scroll-type" class="card-filter-select">
+                  <option value="bar">Barras</option>
+                  <option value="line">Linea</option>
+                </select>
+              </div>
+            </div>
+            <div class="chart-container">
+              <canvas id="chart-scroll"></canvas>
+            </div>
+            <div class="chart-table-container" id="table-chart-scroll" style="display:none">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Profundidad</th>
+                    <th class="num">Visitantes</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <div class="chart-loading" id="loading-scroll">Cargando...</div>
+          </div>
+
+          <div class="card table-card small collapsible" data-section-id="utms-table">
+            <div class="card-header" data-collapse-toggle>
+              <h3>Campanas UTM</h3>
+              <div class="card-filters">
+                <select id="filter-utms-limit" class="card-filter-select">
+                  <option value="5" selected>Top 5</option>
+                  <option value="10">Top 10</option>
+                </select>
+              </div>
+            </div>
+            <div class="table-container">
+              <table class="data-table" id="table-utms">
+                <thead>
+                  <tr>
+                    <th>Campana</th>
+                    <th class="num">Sesiones</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <div class="table-loading" id="loading-utms">Cargando...</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section: Tiempo Real -->
+      <section class="content-section" id="section-realtime" style="display: none;">
+        <div class="realtime-header">
+          <div class="realtime-counter">
+            <span class="realtime-counter-value" id="realtime-counter-value">0</span>
+            <span class="realtime-counter-label">Visitantes activos ahora</span>
+          </div>
+          <div class="realtime-filters">
+            <select id="realtime-minutes" class="filter-select">
+              <option value="5">Ultimos 5 minutos</option>
+              <option value="10">Ultimos 10 minutos</option>
+              <option value="30" selected>Ultimos 30 minutos</option>
+            </select>
+            <span class="realtime-auto-refresh">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+              </svg>
+              Auto-refresh: <span id="realtime-countdown">15</span>s
+            </span>
+          </div>
+        </div>
+
+        <div class="realtime-grid">
+          <div class="card chart-card realtime-trend-card">
+            <div class="card-header">
+              <h3>Visitantes por minuto</h3>
+            </div>
+            <div class="chart-container">
+              <canvas id="chart-realtime-trend"></canvas>
+            </div>
+          </div>
+
+          <div class="card table-card realtime-pages-card">
+            <div class="card-header">
+              <h3>Paginas activas ahora</h3>
+            </div>
+            <div class="table-container">
+              <table class="data-table" id="table-realtime-pages">
+                <thead>
+                  <tr>
+                    <th>Pagina</th>
+                    <th class="num">Visitantes</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card table-card realtime-events-card">
+            <div class="card-header">
+              <h3>Eventos recientes</h3>
+            </div>
+            <div class="table-container realtime-events-scroll">
+              <table class="data-table" id="table-realtime-events">
+                <thead>
+                  <tr>
+                    <th>Evento</th>
+                    <th>Pagina</th>
+                    <th class="num">Hace</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card realtime-device-card">
+            <div class="card-header">
+              <h3>Por dispositivo</h3>
+            </div>
+            <div class="realtime-device-list" id="realtime-device-list">
+              <!-- Dynamic content -->
+            </div>
+          </div>
+
+          <div class="card table-card realtime-sources-card">
+            <div class="card-header">
+              <h3>Fuentes de trafico</h3>
+            </div>
+            <div class="table-container">
+              <table class="data-table" id="table-realtime-sources">
+                <thead>
+                  <tr>
+                    <th>Fuente</th>
+                    <th>Medio</th>
+                    <th class="num">Sesiones</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section: Fuentes de Trafico -->
+      <section class="content-section" id="section-sources" style="display: none;">
+        <div class="section-grid">
+          <div class="card chart-card sources-chart-card">
+            <div class="card-header">
+              <h3>Fuentes de Trafico</h3>
+              <div class="card-actions">
+                <button class="btn-toggle-table" data-chart="sources" title="Ver tabla">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                    <line x1="3" y1="9" x2="21" y2="9"/>
+                    <line x1="3" y1="15" x2="21" y2="15"/>
+                    <line x1="9" y1="3" x2="9" y2="21"/>
+                  </svg>
+                </button>
+                <select id="filter-sources-type" class="card-filter-select">
+                  <option value="pie">Pastel</option>
+                  <option value="bar">Barras</option>
+                  <option value="line">Linea</option>
+                </select>
+              </div>
+            </div>
+            <div class="chart-container">
+              <canvas id="chart-sources"></canvas>
+            </div>
+            <div class="chart-table-container" id="table-chart-sources" style="display:none">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Fuente</th>
+                    <th>Medio</th>
+                    <th class="num">Sesiones</th>
+                    <th class="num">%</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <div class="chart-loading" id="loading-sources">Cargando...</div>
+          </div>
+
+          <div class="card table-card sources-detail-card">
+            <div class="card-header">
+              <h3>Detalle de Fuentes</h3>
+            </div>
+            <div class="table-container">
+              <table class="data-table" id="table-sources-detail">
+                <thead>
+                  <tr>
+                    <th>Fuente</th>
+                    <th>Medio</th>
+                    <th class="num">Sesiones</th>
+                    <th class="num">%</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section: Campanas UTM -->
+      <section class="content-section" id="section-utms" style="display: none;">
+        <div class="card table-card full-width">
+          <div class="card-header">
+            <h3>Campanas UTM</h3>
+            <div class="card-filters">
+              <select id="filter-utms-detail-limit" class="card-filter-select">
+                <option value="10">Top 10</option>
+                <option value="25" selected>Top 25</option>
+                <option value="50">Top 50</option>
+              </select>
+            </div>
+          </div>
+          <div class="table-container">
+            <table class="data-table" id="table-utms-detail">
+              <thead>
+                <tr>
+                  <th>Source</th>
+                  <th>Medium</th>
+                  <th>Campaign</th>
+                  <th class="num">Sesiones</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div class="table-loading" id="loading-utms-detail">Cargando...</div>
+        </div>
+      </section>
+
+      <!-- Section: Paginas -->
+      <section class="content-section" id="section-pages" style="display: none;">
+        <div class="card table-card full-width">
+          <div class="card-header">
+            <h3>Todas las Paginas</h3>
+            <div class="card-filters">
+              <select id="filter-pages-detail-limit" class="card-filter-select">
+                <option value="25">Top 25</option>
+                <option value="50" selected>Top 50</option>
+                <option value="100">Top 100</option>
+              </select>
+            </div>
+          </div>
+          <div class="table-container">
+            <table class="data-table" id="table-pages-detail">
+              <thead>
+                <tr>
+                  <th>Pagina</th>
+                  <th>Titulo</th>
+                  <th class="num">Vistas</th>
+                  <th class="num">Visitantes</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div class="table-loading" id="loading-pages-detail">Cargando...</div>
+        </div>
+      </section>
+
+      <!-- Section: Eventos -->
+      <section class="content-section" id="section-events" style="display: none;">
+        <div class="section-grid">
+          <div class="card chart-card">
+            <div class="card-header">
+              <h3>Distribucion de Eventos</h3>
+              <div class="card-actions">
+                <select id="filter-events-detail-type" class="card-filter-select">
+                  <option value="pie">Pastel</option>
+                  <option value="bar">Barras</option>
+                  <option value="line">Linea</option>
+                </select>
+              </div>
+            </div>
+            <div class="chart-container">
+              <canvas id="chart-events-detail"></canvas>
+            </div>
+            <div class="chart-loading" id="loading-events-detail">Cargando...</div>
+          </div>
+
+          <div class="card table-card">
+            <div class="card-header">
+              <h3>Todos los Eventos</h3>
+            </div>
+            <div class="table-container">
+              <table class="data-table" id="table-events-detail">
+                <thead>
+                  <tr>
+                    <th>Tipo</th>
+                    <th class="num">Cantidad</th>
+                    <th class="num">%</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section: Clicks -->
+      <section class="content-section" id="section-clicks" style="display: none;">
+        <div class="card table-card full-width">
+          <div class="card-header">
+            <h3>Todos los Clicks</h3>
+            <div class="card-filters">
+              <select id="filter-clicks-detail-limit" class="card-filter-select">
+                <option value="25">Top 25</option>
+                <option value="50" selected>Top 50</option>
+                <option value="100">Top 100</option>
+              </select>
+            </div>
+          </div>
+          <div class="table-container">
+            <table class="data-table" id="table-clicks-detail">
+              <thead>
+                <tr>
+                  <th>Elemento ID</th>
+                  <th>Texto</th>
+                  <th>Tag</th>
+                  <th class="num">Clicks</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div class="table-loading" id="loading-clicks-detail">Cargando...</div>
+        </div>
+      </section>
+
+      <!-- Section: Ubicacion -->
+      <section class="content-section" id="section-location" style="display: none;">
+        <div class="section-grid">
+          <div class="card table-card">
+            <div class="card-header">
+              <h3>Paises</h3>
+            </div>
+            <div class="table-container">
+              <table class="data-table" id="table-countries">
+                <thead>
+                  <tr>
+                    <th>Pais</th>
+                    <th class="num">Sesiones</th>
+                    <th class="num">%</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <div class="table-loading" id="loading-countries">Cargando...</div>
+          </div>
+
+          <div class="card table-card">
+            <div class="card-header">
+              <h3>Ciudades (Top 20)</h3>
+            </div>
+            <div class="table-container">
+              <table class="data-table" id="table-cities">
+                <thead>
+                  <tr>
+                    <th>Ciudad</th>
+                    <th>Pais</th>
+                    <th class="num">Sesiones</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <div class="table-loading" id="loading-cities">Cargando...</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section: Dispositivos -->
+      <section class="content-section" id="section-devices" style="display: none;">
+        <div class="section-grid">
+          <div class="card chart-card">
+            <div class="card-header">
+              <h3>Distribucion por Dispositivo</h3>
+              <div class="card-actions">
+                <select id="filter-devices-detail-type" class="card-filter-select">
+                  <option value="pie">Pastel</option>
+                  <option value="bar">Barras</option>
+                  <option value="line">Linea</option>
+                </select>
+              </div>
+            </div>
+            <div class="chart-container">
+              <canvas id="chart-devices-detail"></canvas>
+            </div>
+          </div>
+
+          <div class="card table-card">
+            <div class="card-header">
+              <h3>Detalle de Dispositivos</h3>
+            </div>
+            <div class="table-container">
+              <table class="data-table" id="table-devices-detail">
+                <thead>
+                  <tr>
+                    <th>Dispositivo</th>
+                    <th class="num">Sesiones</th>
+                    <th class="num">%</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section: Navegadores -->
+      <section class="content-section" id="section-browsers" style="display: none;">
+        <div class="section-grid">
+          <div class="card chart-card">
+            <div class="card-header">
+              <h3>Distribucion por Navegador</h3>
+              <div class="card-actions">
+                <select id="filter-browsers-detail-type" class="card-filter-select">
+                  <option value="pie">Pastel</option>
+                  <option value="bar">Barras</option>
+                  <option value="line">Linea</option>
+                </select>
+              </div>
+            </div>
+            <div class="chart-container">
+              <canvas id="chart-browsers-detail"></canvas>
+            </div>
+          </div>
+
+          <div class="card table-card">
+            <div class="card-header">
+              <h3>Detalle de Navegadores</h3>
+            </div>
+            <div class="table-container">
+              <table class="data-table" id="table-browsers-detail">
+                <thead>
+                  <tr>
+                    <th>Navegador</th>
+                    <th class="num">Sesiones</th>
+                    <th class="num">%</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section: Configuracion -->
+      <section class="content-section" id="section-settings" style="display: none;">
+        <div class="settings-grid">
+          <div class="card settings-card">
+            <div class="card-header">
+              <h3>Configuracion del Dashboard</h3>
+            </div>
+            <div class="settings-content">
+              <div class="settings-group">
+                <h4>Secciones visibles en Resumen</h4>
+                <p class="settings-description">Selecciona que secciones mostrar en la vista de Resumen</p>
+                <div class="settings-checkboxes">
+                  <label class="checkbox-label">
+                    <input type="checkbox" id="config-show-trend" checked>
+                    <span>Tendencia de Trafico</span>
+                  </label>
+                  <label class="checkbox-label">
+                    <input type="checkbox" id="config-show-events" checked>
+                    <span>Tipos de Eventos</span>
+                  </label>
+                  <label class="checkbox-label">
+                    <input type="checkbox" id="config-show-devices" checked>
+                    <span>Dispositivos</span>
+                  </label>
+                  <label class="checkbox-label">
+                    <input type="checkbox" id="config-show-browsers" checked>
+                    <span>Navegadores</span>
+                  </label>
+                  <label class="checkbox-label">
+                    <input type="checkbox" id="config-show-scroll" checked>
+                    <span>Scroll Depth</span>
+                  </label>
+                  <label class="checkbox-label">
+                    <input type="checkbox" id="config-show-pages" checked>
+                    <span>Top Paginas</span>
+                  </label>
+                  <label class="checkbox-label">
+                    <input type="checkbox" id="config-show-clicks" checked>
+                    <span>Top Clicks</span>
+                  </label>
+                  <label class="checkbox-label">
+                    <input type="checkbox" id="config-show-referrers" checked>
+                    <span>Fuentes de Trafico</span>
+                  </label>
+                  <label class="checkbox-label">
+                    <input type="checkbox" id="config-show-utms" checked>
+                    <span>Campanas UTM</span>
+                  </label>
+                  <label class="checkbox-label">
+                    <input type="checkbox" id="config-show-heatmap" checked>
+                    <span>Mapa de Calor</span>
+                  </label>
+                </div>
+              </div>
+              <div class="settings-actions">
+                <button class="btn-primary" id="btn-save-settings">Guardar configuracion</button>
+                <button class="btn-secondary" id="btn-reset-settings">Restablecer valores</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Alertas -->
+          <div class="card settings-card">
+            <div class="card-header">
+              <h3>Configuracion de Alertas</h3>
+            </div>
+            <div class="settings-content">
+              <div class="settings-group">
+                <p class="settings-description">Configura umbrales para recibir alertas automaticas</p>
+                <div class="alerts-config">
+                  <div class="alert-config-item">
+                    <label class="checkbox-label">
+                      <input type="checkbox" id="alert-bounce-enabled">
+                      <span>Bounce Rate mayor a</span>
+                    </label>
+                    <input type="number" id="alert-bounce-threshold" class="alert-threshold-input" placeholder="60" max="100">
+                    <span>%</span>
+                  </div>
+                  <div class="alert-config-item">
+                    <label class="checkbox-label">
+                      <input type="checkbox" id="alert-visitors-enabled">
+                      <span>Visitantes menor a</span>
+                    </label>
+                    <input type="number" id="alert-visitors-threshold" class="alert-threshold-input" placeholder="100">
+                    <span>diarios</span>
+                  </div>
+                  <div class="alert-config-item">
+                    <label class="checkbox-label">
+                      <input type="checkbox" id="alert-duration-enabled">
+                      <span>Duracion promedio menor a</span>
+                    </label>
+                    <input type="number" id="alert-duration-threshold" class="alert-threshold-input" placeholder="30">
+                    <span>segundos</span>
+                  </div>
+                  <div class="alert-config-item">
+                    <label class="checkbox-label">
+                      <input type="checkbox" id="alert-traffic-drop-enabled">
+                      <span>Caida de trafico mayor a</span>
+                    </label>
+                    <input type="number" id="alert-traffic-drop-threshold" class="alert-threshold-input" placeholder="30">
+                    <span>%</span>
+                  </div>
+                </div>
+              </div>
+              <div class="settings-actions">
+                <button class="btn-primary" id="btn-save-alerts">Guardar alertas</button>
+                <button class="btn-secondary" id="btn-test-alerts">Probar alertas</button>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <p>MiComercio Analytics v3.1</p>
+    </footer>
+  </div>
+
+  <!-- Modal: Agregar Anotacion -->
+  <div class="modal-overlay" id="modal-annotation" style="display:none;">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Agregar Anotacion</h3>
+        <button class="modal-close" data-close-modal="modal-annotation">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="annotation-date">Fecha</label>
+          <input type="date" id="annotation-date" class="filter-input">
+        </div>
+        <div class="form-group">
+          <label for="annotation-text">Nota</label>
+          <textarea id="annotation-text" class="annotation-textarea" placeholder="Describe el evento..."></textarea>
+        </div>
+        <div class="form-group">
+          <label for="annotation-color">Color</label>
+          <select id="annotation-color" class="filter-select">
+            <option value="#F7941D">Naranja</option>
+            <option value="#E31E24">Rojo</option>
+            <option value="#28a745">Verde</option>
+            <option value="#1E3A5F">Azul</option>
+            <option value="#6c757d">Gris</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" data-close-modal="modal-annotation">Cancelar</button>
+        <button class="btn-primary" id="btn-save-annotation">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Lista de Anotaciones -->
+  <div class="modal-overlay" id="modal-annotations-list" style="display:none;">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h3>Anotaciones</h3>
+        <button class="modal-close" data-close-modal="modal-annotations-list">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="annotations-list" id="annotations-list-container">
+          <p class="empty-state">No hay anotaciones</p>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" data-close-modal="modal-annotations-list">Cerrar</button>
+        <button class="btn-primary" id="btn-new-annotation">Nueva anotacion</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sidebar Overlay for Mobile -->
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <script src="dashboard.js?v=8"></script>
+</body>
+</html>
