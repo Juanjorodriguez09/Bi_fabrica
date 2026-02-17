@@ -1517,34 +1517,96 @@
   // ============================================
 
   // Common datalabels config for showing values
-  function getDataLabelsConfig(showLabels = true, isBar = false, isPie = false) {
+  function getDataLabelsConfig(showLabels = true, isBar = false, isPie = false, datasetIndex = 0) {
     if (!showLabels) {
       return { display: false };
     }
 
+    if (isPie) {
+      return {
+        display: function(context) {
+          const value = context.dataset.data[context.dataIndex];
+          return value > 0;
+        },
+        color: '#fff',
+        font: { weight: 'bold', size: 11 },
+        anchor: 'center',
+        align: 'center',
+        formatter: function(value) {
+          if (value >= 1000000) return (value / 1000000).toFixed(1) + 'M';
+          if (value >= 1000) return (value / 1000).toFixed(1) + 'K';
+          return value;
+        }
+      };
+    }
+
+    if (isBar) {
+      return {
+        display: function(context) {
+          const value = context.dataset.data[context.dataIndex];
+          return value > 0;
+        },
+        color: '#fff',
+        font: { weight: 'bold', size: 10 },
+        anchor: 'center',
+        align: 'center',
+        formatter: function(value) {
+          if (value >= 1000000) return (value / 1000000).toFixed(1) + 'M';
+          if (value >= 1000) return (value / 1000).toFixed(1) + 'K';
+          return value;
+        }
+      };
+    }
+
+    // Line/Area charts: show labels only on first, last, and max points
+    // Each dataset gets a fixed alignment direction so they never overlap
+    const alignByIndex = [
+      { primary: 'top'   },   // Pageviews: arriba
+      { primary: 'right' },   // Sesiones: derecha
+      { primary: 'left'  }    // Visitantes: izquierda
+    ];
+
+    const dsIdx = datasetIndex % 3;
+
     return {
       display: function(context) {
-        // Only show if value is significant
-        const value = context.dataset.data[context.dataIndex];
-        const max = Math.max(...context.dataset.data);
-        return value > 0 && (isPie || value >= max * 0.05);
+        const data = context.dataset.data;
+        const idx = context.dataIndex;
+        const value = data[idx];
+        if (value == null || value <= 0) return false;
+
+        const dataLen = data.length;
+        const isFirst = idx === 0;
+        const isLast = idx === dataLen - 1;
+        const maxVal = Math.max(...data);
+        const isMax = value === maxVal && data.indexOf(maxVal) === idx;
+
+        return isFirst || isLast || isMax;
       },
-      color: isPie ? '#fff' : function(context) {
-        return isBar ? '#fff' : context.dataset.borderColor || COLORS.navy;
+      color: function(context) {
+        return context.dataset.borderColor || COLORS.navy;
       },
-      font: {
-        weight: 'bold',
-        size: isPie ? 11 : 10
+      backgroundColor: 'rgba(255,255,255,0.9)',
+      borderColor: function(context) {
+        return context.dataset.borderColor || COLORS.navy;
       },
-      anchor: isPie ? 'center' : (isBar ? 'center' : 'end'),
-      align: isPie ? 'center' : (isBar ? 'center' : 'top'),
-      offset: isPie ? 0 : 4,
+      borderWidth: 1,
+      borderRadius: 4,
+      padding: { top: 3, bottom: 3, left: 5, right: 5 },
+      font: { weight: 'bold', size: 11 },
+      anchor: function(context) {
+        // For the "top" dataset, anchor at start so label goes above
+        // For "bottom", anchor at start so label goes below
+        return 'center';
+      },
+      align: alignByIndex[dsIdx].primary,
+      offset: 12,
       formatter: function(value) {
         if (value >= 1000000) return (value / 1000000).toFixed(1) + 'M';
         if (value >= 1000) return (value / 1000).toFixed(1) + 'K';
         return value;
       },
-      padding: 2
+      clamp: true
     };
   }
 
@@ -1577,7 +1639,7 @@
         pointHoverRadius: 6,
         pointBackgroundColor: COLORS.primary,
         borderRadius: isBar ? 6 : 0,
-        datalabels: getDataLabelsConfig(true, isBar)
+        datalabels: getDataLabelsConfig(true, isBar, false, 0)
       });
 
       // Add compare line if enabled
@@ -1610,7 +1672,7 @@
         pointHoverRadius: 6,
         pointBackgroundColor: COLORS.navy,
         borderRadius: isBar ? 6 : 0,
-        datalabels: getDataLabelsConfig(true, isBar)
+        datalabels: getDataLabelsConfig(true, isBar, false, 1)
       });
     }
 
@@ -1627,7 +1689,7 @@
         pointHoverRadius: 6,
         pointBackgroundColor: COLORS.success,
         borderRadius: isBar ? 6 : 0,
-        datalabels: getDataLabelsConfig(true, isBar)
+        datalabels: getDataLabelsConfig(true, isBar, false, 2)
       });
     }
 
@@ -1667,8 +1729,9 @@
         interaction: { intersect: false, mode: 'index' },
         layout: {
           padding: {
-            top: 10,
-            bottom: 10
+            top: 30,
+            bottom: 10,
+            right: 20
           }
         },
         plugins: {
@@ -1716,6 +1779,7 @@
         scales: {
           y: {
             beginAtZero: true,
+            grace: '15%',
             grid: { color: state.theme === 'dark' ? '#3A4250' : '#f0f0f0', drawBorder: false },
             ticks: {
               font: { size: 11 },
@@ -2367,29 +2431,77 @@
     const dateStr = `${state.startDate}_${state.endDate}`;
     const filename = `MiComercio_Analytics_${siteName}_${dateStr}.csv`;
 
-    let csv = 'Metrica,Valor\n';
+    // BOM for Excel UTF-8 compatibility
+    let csv = '\uFEFF';
+
+    // Header
+    csv += `MICOMERCIO ANALYTICS - REPORTE\n`;
+    csv += `Sitio:,${siteName}\n`;
+    csv += `Periodo:,${state.startDate} a ${state.endDate}\n`;
+    csv += `Generado:,${new Date().toLocaleString('es-ES')}\n`;
+    csv += `\n`;
+
+    // Summary
     if (exportData.summary) {
+      csv += `=== RESUMEN GENERAL ===\n`;
+      csv += `Metrica,Valor\n`;
       csv += `Pageviews,${exportData.summary.pageviews}\n`;
       csv += `Sesiones,${exportData.summary.sessions}\n`;
-      csv += `Visitantes,${exportData.summary.uniqueVisitors}\n`;
-      csv += `Bounce Rate,${exportData.summary.bounceRate}%\n`;
-      csv += `Duracion Promedio,${exportData.summary.avgSessionDuration}s\n`;
-      csv += `Paginas/Sesion,${exportData.summary.avgPagesPerSession}\n`;
+      csv += `Visitantes Unicos,${exportData.summary.uniqueVisitors}\n`;
+      csv += `Visitantes Nuevos,${exportData.summary.newVisitors || 0}\n`;
+      csv += `Visitantes Recurrentes,${exportData.summary.returningVisitors || 0}\n`;
+      csv += `Tasa de Rebote,${exportData.summary.bounceRate}%\n`;
+      csv += `Duracion Promedio,"${formatDuration(exportData.summary.avgSessionDuration)}"\n`;
+      csv += `Paginas por Sesion,${exportData.summary.avgPagesPerSession}\n`;
+      csv += `\n`;
     }
 
+    // Daily trend
     if (exportData.trend && exportData.trend.length > 0) {
-      csv += '\nTendencia Diaria\n';
-      csv += 'Fecha,Pageviews,Sesiones,Visitantes\n';
+      csv += `=== TENDENCIA DIARIA ===\n`;
+      csv += `Fecha,Pageviews,Sesiones,Visitantes\n`;
       exportData.trend.forEach(row => {
         csv += `${row.date},${row.pageviews},${row.sessions},${row.visitors}\n`;
       });
+      csv += `\n`;
     }
 
+    // Top pages
     if (exportData.pages && exportData.pages.length > 0) {
-      csv += '\nTop Paginas\n';
-      csv += 'Pagina,Vistas,Visitantes\n';
+      csv += `=== TOP PAGINAS ===\n`;
+      csv += `Pagina,Titulo,Vistas,Visitantes Unicos\n`;
       exportData.pages.forEach(row => {
-        csv += `"${row.path || ''}",${row.views},${row.uniqueVisitors}\n`;
+        csv += `"${(row.path || '').replace(/"/g, '""')}","${(row.title || '').replace(/"/g, '""')}",${row.views},${row.uniqueVisitors}\n`;
+      });
+      csv += `\n`;
+    }
+
+    // Top clicks
+    if (exportData.clicks && exportData.clicks.length > 0) {
+      csv += `=== TOP CLICKS ===\n`;
+      csv += `Identificador,Texto,Elemento,Clicks\n`;
+      exportData.clicks.forEach(row => {
+        csv += `"${(row.elementId || '').replace(/"/g, '""')}","${(row.elementText || '').replace(/"/g, '""')}",${row.elementTag || ''},${row.clicks}\n`;
+      });
+      csv += `\n`;
+    }
+
+    // Traffic sources
+    if (exportData.referrers && exportData.referrers.length > 0) {
+      csv += `=== FUENTES DE TRAFICO ===\n`;
+      csv += `Referrer,Sesiones\n`;
+      exportData.referrers.forEach(row => {
+        csv += `"${(row.referrer || '').replace(/"/g, '""')}",${row.sessions}\n`;
+      });
+      csv += `\n`;
+    }
+
+    // UTM campaigns
+    if (exportData.utms && exportData.utms.length > 0) {
+      csv += `=== CAMPANAS UTM ===\n`;
+      csv += `Source,Medium,Campaign,Sesiones\n`;
+      exportData.utms.forEach(row => {
+        csv += `"${row.source || ''}","${row.medium || ''}","${row.campaign || ''}",${row.sessions}\n`;
       });
     }
 
@@ -2401,6 +2513,52 @@
     URL.revokeObjectURL(link.href);
   }
 
+  // Helper: capture charts and their related tables from cards inside a section
+  async function captureSectionContent(container) {
+    let html = '';
+    const cards = container.querySelectorAll('.card');
+
+    for (const card of cards) {
+      if (card.offsetParent === null) continue;
+
+      // Get card title
+      const titleEl = card.querySelector('.card-header h3');
+      const title = titleEl ? titleEl.textContent.trim() : '';
+
+      // Capture chart canvas (only the canvas itself, clean)
+      const canvas = card.querySelector('canvas');
+      if (canvas && canvas.width > 0 && canvas.offsetParent !== null) {
+        if (title) html += `<div class="pdf-section-title">${title}</div>`;
+        try {
+          // Capture only the canvas, not the parent with buttons/filters
+          const imgData = canvas.toDataURL('image/png');
+          html += `<img class="pdf-chart-img" src="${imgData}" alt="${title}">`;
+        } catch (e) { /* skip */ }
+      }
+
+      // Capture tables with data
+      const tables = card.querySelectorAll('table.data-table');
+      tables.forEach(table => {
+        const tbody = table.querySelector('tbody');
+        if (!tbody || tbody.children.length === 0) return;
+
+        // Only add title if we didn't already add it for a chart above
+        if (!canvas && title) {
+          html += `<div class="pdf-section-title">${title}</div>`;
+        }
+
+        // Clone the table content (thead + tbody) cleanly
+        html += `<table>`;
+        const thead = table.querySelector('thead');
+        if (thead) html += `<thead>${thead.innerHTML}</thead>`;
+        html += `<tbody>${tbody.innerHTML}</tbody>`;
+        html += `</table>`;
+      });
+    }
+
+    return html;
+  }
+
   async function exportToPDF() {
     const { jsPDF } = window.jspdf;
     if (!jsPDF || !window.html2canvas) {
@@ -2410,51 +2568,186 @@
 
     const siteName = elements.siteSelect.options[elements.siteSelect.selectedIndex]?.text || 'site';
     const dateStr = `${state.startDate}_${state.endDate}`;
+    const generatedAt = new Date().toLocaleString('es-ES');
+    const currentSection = state.currentSection || 'resumen';
+    const sectionTitle = SECTION_TITLES[currentSection] || 'Resumen';
 
-    const pdf = new jsPDF('p', 'mm', 'a4');
-    const pageWidth = pdf.internal.pageSize.getWidth();
+    // Build preview HTML
+    let previewHtml = `<div class="pdf-page" id="pdf-render-page">`;
 
-    // Title
-    pdf.setFontSize(20);
-    pdf.setTextColor(30, 58, 95);
-    pdf.text('MiComercio Analytics - Reporte', 14, 20);
+    // Header
+    previewHtml += `
+      <div class="pdf-header">
+        <h1 class="pdf-title">MiComercio Analytics</h1>
+        <div class="pdf-subtitle">
+          Sitio: <strong>${siteName}</strong><br>
+          Seccion: <strong>${sectionTitle}</strong><br>
+          Periodo: ${state.startDate} a ${state.endDate}<br>
+          Generado: ${generatedAt}
+        </div>
+      </div>
+    `;
 
-    pdf.setFontSize(12);
-    pdf.setTextColor(102, 102, 102);
-    pdf.text(`Sitio: ${siteName}`, 14, 30);
-    pdf.text(`Periodo: ${state.startDate} a ${state.endDate}`, 14, 36);
-    pdf.text(`Generado: ${new Date().toLocaleString('es-ES')}`, 14, 42);
-
-    // Summary metrics
+    // Summary metrics (always show if available)
     if (exportData.summary) {
-      pdf.setFontSize(14);
-      pdf.setTextColor(30, 58, 95);
-      pdf.text('Resumen', 14, 55);
-
-      pdf.setFontSize(10);
-      pdf.setTextColor(0, 0, 0);
-      const summary = exportData.summary;
-      pdf.text(`Pageviews: ${formatNumber(summary.pageviews)}`, 14, 65);
-      pdf.text(`Sesiones: ${formatNumber(summary.sessions)}`, 70, 65);
-      pdf.text(`Visitantes: ${formatNumber(summary.uniqueVisitors)}`, 126, 65);
-      pdf.text(`Bounce: ${summary.bounceRate}%`, 14, 72);
-      pdf.text(`Duracion: ${formatDuration(summary.avgSessionDuration)}`, 70, 72);
-      pdf.text(`Pags/Sesion: ${summary.avgPagesPerSession}`, 126, 72);
+      const s = exportData.summary;
+      previewHtml += `
+        <div class="pdf-section-title">Resumen General</div>
+        <div class="pdf-metrics">
+          <div class="pdf-metric-card">
+            <span class="pdf-metric-value">${formatNumber(s.pageviews)}</span>
+            <span class="pdf-metric-label">Pageviews</span>
+          </div>
+          <div class="pdf-metric-card">
+            <span class="pdf-metric-value">${formatNumber(s.sessions)}</span>
+            <span class="pdf-metric-label">Sesiones</span>
+          </div>
+          <div class="pdf-metric-card">
+            <span class="pdf-metric-value">${formatNumber(s.uniqueVisitors)}</span>
+            <span class="pdf-metric-label">Visitantes</span>
+          </div>
+          <div class="pdf-metric-card">
+            <span class="pdf-metric-value">${s.bounceRate}%</span>
+            <span class="pdf-metric-label">Tasa de Rebote</span>
+          </div>
+          <div class="pdf-metric-card">
+            <span class="pdf-metric-value">${formatDuration(s.avgSessionDuration)}</span>
+            <span class="pdf-metric-label">Duracion Promedio</span>
+          </div>
+          <div class="pdf-metric-card">
+            <span class="pdf-metric-value">${s.avgPagesPerSession}</span>
+            <span class="pdf-metric-label">Pags / Sesion</span>
+          </div>
+        </div>
+      `;
     }
 
-    // Capture trend chart
-    const trendCanvas = document.getElementById('chart-trend');
-    if (trendCanvas) {
-      try {
-        const canvas = await html2canvas(trendCanvas.parentElement, { scale: 2 });
-        const imgData = canvas.toDataURL('image/png');
-        pdf.addImage(imgData, 'PNG', 14, 80, pageWidth - 28, 60);
-      } catch (e) {
-        console.log('Error capturing chart:', e);
+    // Capture the currently visible section content (charts + tables)
+    const activeSection = document.getElementById('section-' + currentSection);
+
+    if (activeSection) {
+      const sectionContent = await captureSectionContent(activeSection);
+      if (sectionContent) {
+        previewHtml += sectionContent;
       }
     }
 
-    pdf.save(`MiComercio_Analytics_${siteName}_${dateStr}.pdf`);
+    // For resumen section, also add exportData tables that might not be in visible DOM
+    if (currentSection === 'resumen') {
+      if (exportData.trend && exportData.trend.length > 0) {
+        previewHtml += `<div class="pdf-section-title">Tendencia Diaria</div><table><tr><th>Fecha</th><th class="num">Pageviews</th><th class="num">Sesiones</th><th class="num">Visitantes</th></tr>`;
+        exportData.trend.forEach(row => {
+          previewHtml += `<tr><td>${row.date}</td><td class="num">${row.pageviews}</td><td class="num">${row.sessions}</td><td class="num">${row.visitors}</td></tr>`;
+        });
+        previewHtml += `</table>`;
+      }
+
+      if (exportData.pages && exportData.pages.length > 0) {
+        previewHtml += `<div class="pdf-section-title">Top Paginas</div><table><tr><th>Pagina</th><th>Titulo</th><th class="num">Vistas</th><th class="num">Visitantes</th></tr>`;
+        exportData.pages.forEach(row => {
+          previewHtml += `<tr><td>${row.path || ''}</td><td>${row.title || ''}</td><td class="num">${row.views}</td><td class="num">${row.uniqueVisitors}</td></tr>`;
+        });
+        previewHtml += `</table>`;
+      }
+
+      if (exportData.clicks && exportData.clicks.length > 0) {
+        previewHtml += `<div class="pdf-section-title">Top Clicks</div><table><tr><th>Identificador</th><th>Texto</th><th>Elemento</th><th class="num">Clicks</th></tr>`;
+        exportData.clicks.forEach(row => {
+          previewHtml += `<tr><td>${row.elementId || ''}</td><td>${row.elementText || ''}</td><td>${row.elementTag || ''}</td><td class="num">${row.clicks}</td></tr>`;
+        });
+        previewHtml += `</table>`;
+      }
+
+      if (exportData.referrers && exportData.referrers.length > 0) {
+        previewHtml += `<div class="pdf-section-title">Fuentes de Trafico</div><table><tr><th>Referrer</th><th class="num">Sesiones</th></tr>`;
+        exportData.referrers.forEach(row => {
+          previewHtml += `<tr><td>${row.referrer}</td><td class="num">${row.sessions}</td></tr>`;
+        });
+        previewHtml += `</table>`;
+      }
+
+      if (exportData.utms && exportData.utms.length > 0) {
+        previewHtml += `<div class="pdf-section-title">Campanas UTM</div><table><tr><th>Source</th><th>Medium</th><th>Campaign</th><th class="num">Sesiones</th></tr>`;
+        exportData.utms.forEach(row => {
+          previewHtml += `<tr><td>${row.source || ''}</td><td>${row.medium || ''}</td><td>${row.campaign || ''}</td><td class="num">${row.sessions}</td></tr>`;
+        });
+        previewHtml += `</table>`;
+      }
+    }
+
+    // Footer
+    previewHtml += `<div class="pdf-footer">MiComercio Analytics &bull; ${sectionTitle} &bull; Reporte generado el ${generatedAt}</div>`;
+    previewHtml += `</div>`;
+
+    // Show preview modal
+    const modal = document.getElementById('modal-pdf-preview');
+    const previewContainer = document.getElementById('pdf-preview-content');
+    previewContainer.innerHTML = previewHtml;
+    modal.style.display = 'flex';
+
+    // Close modal handlers
+    modal.querySelector('[data-close-modal]').onclick = () => { modal.style.display = 'none'; };
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.style.display = 'none'; });
+
+    // Download button
+    document.getElementById('btn-pdf-download').onclick = async () => {
+      const renderPage = document.getElementById('pdf-render-page');
+      const btnDownload = document.getElementById('btn-pdf-download');
+      btnDownload.textContent = 'Generando...';
+      btnDownload.disabled = true;
+
+      try {
+        const canvas = await html2canvas(renderPage, {
+          scale: 2,
+          useCORS: true,
+          backgroundColor: '#ffffff',
+          width: renderPage.scrollWidth,
+          height: renderPage.scrollHeight
+        });
+
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        const pageWidth = pdf.internal.pageSize.getWidth();
+        const pageHeight = pdf.internal.pageSize.getHeight();
+        const margin = 8;
+        const usableWidth = pageWidth - margin * 2;
+
+        const imgWidth = canvas.width;
+        const imgHeight = canvas.height;
+        const ratio = usableWidth / imgWidth;
+        const scaledHeight = imgHeight * ratio;
+
+        // Multi-page support
+        let yOffset = 0;
+        const usableHeight = pageHeight - margin * 2;
+
+        while (yOffset < scaledHeight) {
+          if (yOffset > 0) pdf.addPage();
+
+          const sourceY = (yOffset / ratio);
+          const sourceH = Math.min(usableHeight / ratio, imgHeight - sourceY);
+          const destH = sourceH * ratio;
+
+          const pageCanvas = document.createElement('canvas');
+          pageCanvas.width = imgWidth;
+          pageCanvas.height = sourceH;
+          const pCtx = pageCanvas.getContext('2d');
+          pCtx.drawImage(canvas, 0, sourceY, imgWidth, sourceH, 0, 0, imgWidth, sourceH);
+
+          const pageImgData = pageCanvas.toDataURL('image/png');
+          pdf.addImage(pageImgData, 'PNG', margin, margin, usableWidth, destH);
+
+          yOffset += usableHeight;
+        }
+
+        pdf.save(`MiComercio_Analytics_${siteName}_${sectionTitle}_${dateStr}.pdf`);
+      } catch (e) {
+        console.error('Error generating PDF:', e);
+        alert('Error al generar el PDF');
+      } finally {
+        btnDownload.textContent = 'Descargar PDF';
+        btnDownload.disabled = false;
+      }
+    };
   }
 
   // ============================================

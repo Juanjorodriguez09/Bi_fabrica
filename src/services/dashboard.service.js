@@ -242,7 +242,7 @@ async function getTopClicks(siteId, startDate, endDate, limit = 10) {
 
   const clicks = await prisma.$queryRaw`
     SELECT
-      meta_data->>'elementId' as element_id,
+      COALESCE(meta_data->>'elementId', meta_data->>'elementText', meta_data->'elementClasses'->>0, 'unknown') as element_id,
       meta_data->>'elementText' as element_text,
       meta_data->>'elementTag' as element_tag,
       COUNT(*) as clicks
@@ -251,7 +251,6 @@ async function getTopClicks(siteId, startDate, endDate, limit = 10) {
       AND event_type = 'click'
       AND occurred_at >= ${start}
       AND occurred_at <= ${end}
-      AND meta_data->>'elementId' IS NOT NULL
     GROUP BY element_id, element_text, element_tag
     ORDER BY clicks DESC
     LIMIT ${limit}

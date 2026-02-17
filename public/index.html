@@ -1316,9 +1316,26 @@
     </div>
   </div>
 
+  <!-- PDF Preview Modal -->
+  <div class="modal-overlay" id="modal-pdf-preview" style="display:none;">
+    <div class="modal modal-pdf">
+      <div class="modal-header">
+        <h3>Vista Previa - Reporte PDF</h3>
+        <button class="modal-close" data-close-modal="modal-pdf-preview">&times;</button>
+      </div>
+      <div class="modal-body" id="pdf-preview-body" style="padding:0; background:#e8e8e8;">
+        <div id="pdf-preview-content" style="margin:0 auto;"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" data-close-modal="modal-pdf-preview">Cancelar</button>
+        <button class="btn-primary" id="btn-pdf-download">Descargar PDF</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Sidebar Overlay for Mobile -->
   <div class="sidebar-overlay" id="sidebar-overlay"></div>
 
-  <script src="dashboard.js?v=8"></script>
+  <script src="dashboard.js?v=9"></script>
 </body>
 </html>

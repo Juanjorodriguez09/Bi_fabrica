@@ -2023,6 +2023,145 @@ body.sidebar-collapsed .main-wrapper {
   max-width: 600px;
 }
 
+.modal.modal-pdf {
+  max-width: 900px;
+  max-height: 95vh;
+}
+
+.modal.modal-pdf .modal-body {
+  overflow-y: auto;
+  max-height: calc(95vh - 130px);
+}
+
+/* PDF preview page styling */
+.pdf-page {
+  background: white;
+  width: 210mm;
+  min-height: 297mm;
+  margin: 20px auto;
+  padding: 30px 35px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+  font-family: 'Segoe UI', Arial, sans-serif;
+  font-size: 12px;
+  color: #333;
+  box-sizing: border-box;
+}
+
+.pdf-page .pdf-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 3px solid #1E3A5F;
+  padding-bottom: 12px;
+  margin-bottom: 20px;
+}
+
+.pdf-page .pdf-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: #1E3A5F;
+  margin: 0;
+}
+
+.pdf-page .pdf-subtitle {
+  font-size: 11px;
+  color: #666;
+  text-align: right;
+  line-height: 1.6;
+}
+
+.pdf-page .pdf-section-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  background: #1E3A5F;
+  padding: 8px 14px;
+  border-radius: 4px;
+  margin: 24px 0 12px 0;
+}
+
+.pdf-page .pdf-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.pdf-page .pdf-metric-card {
+  background: #f5f7fa;
+  border-radius: 8px;
+  padding: 14px;
+  text-align: center;
+  border-left: 4px solid #F7941D;
+}
+
+.pdf-page .pdf-metric-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1E3A5F;
+  display: block;
+}
+
+.pdf-page .pdf-metric-label {
+  font-size: 10px;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.pdf-page .pdf-chart-img {
+  width: 100%;
+  border: 1px solid #eee;
+  border-radius: 6px;
+  margin: 8px 0 16px;
+}
+
+.pdf-page table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 16px;
+  font-size: 11px;
+}
+
+.pdf-page table th {
+  background: #F7941D;
+  color: white;
+  padding: 8px 10px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 11px;
+}
+
+.pdf-page table th:first-child {
+  border-radius: 4px 0 0 0;
+}
+
+.pdf-page table th:last-child {
+  border-radius: 0 4px 0 0;
+}
+
+.pdf-page table td {
+  padding: 7px 10px;
+  border-bottom: 1px solid #eee;
+}
+
+.pdf-page table tr:nth-child(even) {
+  background: #fafafa;
+}
+
+.pdf-page table .num {
+  text-align: right;
+}
+
+.pdf-page .pdf-footer {
+  margin-top: 30px;
+  padding-top: 12px;
+  border-top: 1px solid #ddd;
+  text-align: center;
+  font-size: 10px;
+  color: #999;
+}
+
 .modal-header {
   display: flex;
   align-items: center;
