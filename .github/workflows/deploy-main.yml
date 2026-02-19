@@ -18,20 +18,17 @@ jobs:
           node-version: '24.13.0'
           cache: 'npm'
 
-      - name: 📦 Install Dependencies
-        run: npm ci
-
-      - name: 🗄️ Generate Prisma Client
-        run: npx prisma generate
-
       - name: 🚀 Deploy via Rsync
         uses: easingthemes/ssh-deploy@v5.0.0
         env:
           SSH_PRIVATE_KEY: ${{ secrets.CONTABO_SSH_PRIVATE_KEY_PRE }}
-          ARGS: "-avz --delete --exclude=.git/ --exclude=.github/ --exclude=.env* --exclude=logs/ --exclude=npm-debug.log*"
+          ARGS: "-avz --delete --exclude=.git/ --exclude=.github/ --exclude-from=.gitignore"
           SOURCE: "./"
           REMOTE_HOST: ${{ secrets.CONTABO_SSH_HOST }}
           REMOTE_USER: ${{ secrets.CONTABO_SSH_USER }}
           TARGET: ${{ secrets.CONTABO_SSH_DIR_MAIN_BI_DASH }}
           SCRIPT_AFTER: |
-            pm2 restart 1
+            cd ${{ secrets.CONTABO_SSH_DIR_MAIN_BI_DASH }}
+            npm ci
+            npx prisma generate
+            pm2 restart 1 
