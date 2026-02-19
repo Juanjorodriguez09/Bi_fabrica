@@ -34,4 +34,4 @@ jobs:
           REMOTE_USER: ${{ secrets.CONTABO_SSH_USER }}
           TARGET: ${{ secrets.CONTABO_SSH_DIR_MAIN_BI_DASH }}
           SCRIPT_AFTER: |
-            pm2 restart 0
+            pm2 restart 1
