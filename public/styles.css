@@ -1,31 +1,36 @@
 /**
- * MiComercio Analytics - Dashboard Styles v4.0 PRO
- * Brand Colors: Orange #F7941D, Red #E31E24, Navy #1E3A5F, Gray #666666
- * Includes: Dark Mode, Alerts, Goals, Annotations
+ * MiComercio Analytics - Dashboard Styles v5.0
+ * Brand Colors: Azul Océano #0077B6, Azul Marino #03045E, Cian #00B4D8, Coral #FC6E50
+ * Guía de Estilo MiComercio - Ocean Breeze + Vibrant Coral
  */
 
 :root {
-  --color-primary: #F7941D;
-  --color-primary-dark: #e5850f;
-  --color-secondary: #E31E24;
-  --color-navy: #1E3A5F;
-  --color-navy-light: #2a4d7a;
-  --color-gray: #666666;
+  --color-primary: #0077B6;
+  --color-primary-dark: #005f92;
+  --color-secondary: #FC3A54;
+  --color-navy: #03045E;
+  --color-navy-light: #0077B6;
+  --color-gray: #6c757d;
   --color-gray-light: #999999;
-  --color-gray-lighter: #e5e5e5;
-  --color-background: #f5f7fa;
+  --color-gray-lighter: #DDDDDD;
+  --color-background: #F8F9FA;
   --color-white: #ffffff;
-  --color-success: #28a745;
-  --color-warning: #ffc107;
-  --color-error: #dc3545;
+  --color-success: #FC6E50;
+  --color-warning: #00B4D8;
+  --color-error: #FC3A54;
+  --color-accent: #00B4D8;
+  --color-coral: #FC6E50;
+  --color-cyan: #00B4D8;
+  --color-night: #040C2C;
+  --color-purple: #261C3C;
 
-  --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
-  --shadow-md: 0 4px 12px rgba(0,0,0,0.1);
-  --shadow-lg: 0 8px 24px rgba(0,0,0,0.12);
+  --shadow-sm: 0 1px 3px rgba(3,4,94,0.06);
+  --shadow-md: 0 4px 12px rgba(3,4,94,0.1);
+  --shadow-lg: 0 8px 24px rgba(3,4,94,0.12);
 
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
 
   --transition: all 0.2s ease;
 
@@ -35,38 +40,38 @@
   --filters-height: 52px;
 
   /* Chart colors for dynamic updates */
-  --chart-primary: #F7941D;
-  --chart-navy: #1E3A5F;
-  --chart-success: #28a745;
-  --chart-secondary: #E31E24;
+  --chart-primary: #0077B6;
+  --chart-navy: #03045E;
+  --chart-success: #FC6E50;
+  --chart-secondary: #00B4D8;
 }
 
 /* ============================================
    Dark Mode
    ============================================ */
 [data-theme="dark"] {
-  --color-primary: #FFA940;
-  --color-primary-dark: #F7941D;
-  --color-secondary: #FF6B6B;
+  --color-primary: #38A3D6;
+  --color-primary-dark: #0077B6;
+  --color-secondary: #FC5A6E;
   --color-navy: #E8EDF3;
-  --color-navy-light: #B8C4D4;
+  --color-navy-light: #8ECAE6;
   --color-gray: #A0A8B0;
   --color-gray-light: #6C7580;
-  --color-gray-lighter: #3A4250;
-  --color-background: #1A1E26;
-  --color-white: #242A34;
-  --color-success: #4ADE80;
-  --color-warning: #FACC15;
-  --color-error: #F87171;
+  --color-gray-lighter: #2A3040;
+  --color-background: #0A0E1A;
+  --color-white: #141826;
+  --color-success: #FC8E78;
+  --color-warning: #48D1E8;
+  --color-error: #FC5A6E;
 
   --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
   --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
   --shadow-lg: 0 8px 24px rgba(0,0,0,0.5);
 
-  --chart-primary: #FFA940;
-  --chart-navy: #64B5F6;
-  --chart-success: #4ADE80;
-  --chart-secondary: #FF6B6B;
+  --chart-primary: #38A3D6;
+  --chart-navy: #8ECAE6;
+  --chart-success: #FC8E78;
+  --chart-secondary: #48D1E8;
 }
 
 [data-theme="dark"] body {
@@ -75,7 +80,7 @@
 }
 
 [data-theme="dark"] .sidebar {
-  background: #141820;
+  background: #060A16;
 }
 
 [data-theme="dark"] .header,
@@ -737,7 +742,7 @@ body.sidebar-collapsed .main-wrapper {
   width: 48px;
   height: 48px;
   border-radius: var(--radius-md);
-  background: rgba(247, 148, 29, 0.1);
+  background: rgba(0, 119, 182, 0.1);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -767,28 +772,28 @@ body.sidebar-collapsed .main-wrapper {
 }
 
 .summary-card[data-metric="sessions"] .card-icon {
-  background: rgba(30, 58, 95, 0.1);
+  background: rgba(3, 4, 94, 0.08);
   color: var(--color-navy);
 }
 
 .summary-card[data-metric="visitors"] .card-icon {
-  background: rgba(40, 167, 69, 0.1);
-  color: var(--color-success);
+  background: rgba(0, 180, 216, 0.1);
+  color: var(--color-cyan);
 }
 
 .summary-card[data-metric="bounce"] .card-icon {
-  background: rgba(227, 30, 36, 0.1);
+  background: rgba(252, 58, 84, 0.1);
   color: var(--color-secondary);
 }
 
 .summary-card[data-metric="duration"] .card-icon {
-  background: rgba(102, 102, 102, 0.1);
-  color: var(--color-gray);
+  background: rgba(252, 110, 80, 0.08);
+  color: var(--color-coral);
 }
 
 .summary-card[data-metric="pages-session"] .card-icon {
-  background: rgba(30, 58, 95, 0.1);
-  color: var(--color-navy-light);
+  background: rgba(0, 119, 182, 0.1);
+  color: var(--color-primary);
 }
 
 /* ============================================
@@ -934,7 +939,7 @@ body.sidebar-collapsed .main-wrapper {
 }
 
 .data-table tbody tr:hover {
-  background: rgba(247, 148, 29, 0.04);
+  background: rgba(0, 119, 182, 0.04);
 }
 
 .data-table tbody tr:last-child td {
@@ -1340,52 +1345,52 @@ body.sidebar-collapsed .main-wrapper {
 }
 
 .heatmap-cell[data-intensity="1"] {
-  background: #ffe5cc;
+  background: #CAF0F8;
   color: var(--color-gray);
 }
 
 .heatmap-cell[data-intensity="2"] {
-  background: #ffcc99;
+  background: #90E0EF;
   color: var(--color-navy);
 }
 
 .heatmap-cell[data-intensity="3"] {
-  background: #ffb366;
+  background: #48CAE4;
   color: var(--color-navy);
 }
 
 .heatmap-cell[data-intensity="4"] {
-  background: #ff9933;
+  background: #00B4D8;
   color: var(--color-white);
 }
 
 .heatmap-cell[data-intensity="5"] {
-  background: var(--color-primary);
+  background: #0096C7;
   color: var(--color-white);
 }
 
 .heatmap-cell[data-intensity="6"] {
-  background: #e5850f;
+  background: #0077B6;
   color: var(--color-white);
 }
 
 .heatmap-cell[data-intensity="7"] {
-  background: #cc7300;
+  background: #005f92;
   color: var(--color-white);
 }
 
 .heatmap-cell[data-intensity="8"] {
-  background: #b36300;
+  background: #03045E;
   color: var(--color-white);
 }
 
 .heatmap-cell[data-intensity="9"] {
-  background: var(--color-secondary);
+  background: #FC6E50;
   color: var(--color-white);
 }
 
 .heatmap-cell[data-intensity="10"] {
-  background: #b31519;
+  background: #FC3A54;
   color: var(--color-white);
 }
 
@@ -1984,7 +1989,7 @@ body.sidebar-collapsed .main-wrapper {
 .settings-note {
   margin-top: 16px;
   padding: 12px;
-  background: rgba(247, 148, 29, 0.1);
+  background: rgba(0, 119, 182, 0.08);
   border-radius: var(--radius-sm);
   font-size: 12px;
   color: var(--color-primary-dark);
@@ -2051,7 +2056,7 @@ body.sidebar-collapsed .main-wrapper {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-bottom: 3px solid #1E3A5F;
+  border-bottom: 3px solid #03045E;
   padding-bottom: 12px;
   margin-bottom: 20px;
 }
@@ -2059,7 +2064,7 @@ body.sidebar-collapsed .main-wrapper {
 .pdf-page .pdf-title {
   font-size: 22px;
   font-weight: 700;
-  color: #1E3A5F;
+  color: #03045E;
   margin: 0;
 }
 
@@ -2074,7 +2079,7 @@ body.sidebar-collapsed .main-wrapper {
   font-size: 14px;
   font-weight: 700;
   color: #fff;
-  background: #1E3A5F;
+  background: #03045E;
   padding: 8px 14px;
   border-radius: 4px;
   margin: 24px 0 12px 0;
@@ -2088,17 +2093,17 @@ body.sidebar-collapsed .main-wrapper {
 }
 
 .pdf-page .pdf-metric-card {
-  background: #f5f7fa;
+  background: #F8F9FA;
   border-radius: 8px;
   padding: 14px;
   text-align: center;
-  border-left: 4px solid #F7941D;
+  border-left: 4px solid #0077B6;
 }
 
 .pdf-page .pdf-metric-value {
   font-size: 24px;
   font-weight: 700;
-  color: #1E3A5F;
+  color: #03045E;
   display: block;
 }
 
@@ -2124,7 +2129,7 @@ body.sidebar-collapsed .main-wrapper {
 }
 
 .pdf-page table th {
-  background: #F7941D;
+  background: #0077B6;
   color: white;
   padding: 8px 10px;
   text-align: left;
@@ -2251,7 +2256,7 @@ body.sidebar-collapsed .main-wrapper {
   padding: 12px;
   background: var(--color-background);
   border-radius: var(--radius-md);
-  border-left: 4px solid var(--color-primary);
+  border-left: 4px solid var(--color-coral);
 }
 
 .annotation-item-content {
@@ -2281,6 +2286,96 @@ body.sidebar-collapsed .main-wrapper {
 
 .annotation-item-delete:hover {
   color: var(--color-error);
+}
+
+/* ============================================
+   Funnel Visual (E-commerce)
+   ============================================ */
+.funnel-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 30px 20px;
+  gap: 0;
+  overflow-x: auto;
+}
+
+.funnel-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-width: 120px;
+  flex: 1;
+}
+
+.funnel-step-bar {
+  width: 100%;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-white);
+  font-size: 22px;
+  font-weight: 700;
+  transition: var(--transition);
+  min-height: 50px;
+}
+
+.funnel-step-bar:hover {
+  opacity: 0.85;
+  transform: scaleY(1.05);
+}
+
+.funnel-step-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-navy);
+  text-align: center;
+}
+
+.funnel-step-sublabel {
+  font-size: 11px;
+  color: var(--color-gray);
+}
+
+.funnel-arrow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 50px;
+  color: var(--color-gray-light);
+  font-size: 11px;
+  gap: 2px;
+}
+
+.funnel-arrow svg {
+  color: var(--color-gray-light);
+}
+
+.funnel-drop {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-secondary);
+}
+
+@media (max-width: 768px) {
+  .funnel-container {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .funnel-arrow {
+    transform: rotate(90deg);
+    min-width: auto;
+    min-height: 40px;
+  }
+
+  .funnel-step {
+    min-width: auto;
+    width: 100%;
+  }
 }
 
 /* ============================================

@@ -13,23 +13,27 @@
   const REALTIME_INTERVAL = 30000;
   const REALTIME_DETAILED_INTERVAL = 15000;
 
-  // Dynamic colors that update with theme
+  // Dynamic colors that update with theme (MiComercio Brand)
   let COLORS = {
-    primary: '#F7941D',
-    secondary: '#E31E24',
-    navy: '#1E3A5F',
-    gray: '#666666',
-    success: '#28a745',
-    chart: ['#F7941D', '#1E3A5F', '#E31E24', '#28a745', '#6c757d', '#17a2b8', '#ffc107', '#6610f2']
+    primary: '#0077B6',
+    secondary: '#FC3A54',
+    navy: '#03045E',
+    gray: '#6c757d',
+    success: '#FC6E50',
+    cyan: '#00B4D8',
+    coral: '#FC6E50',
+    chart: ['#0077B6', '#03045E', '#00B4D8', '#FC6E50', '#FC3A54', '#AC1C54', '#261C3C', '#0096C7']
   };
 
   const COLORS_DARK = {
-    primary: '#FFA940',
-    secondary: '#FF6B6B',
-    navy: '#64B5F6',
+    primary: '#38A3D6',
+    secondary: '#FC5A6E',
+    navy: '#8ECAE6',
     gray: '#A0A8B0',
-    success: '#4ADE80',
-    chart: ['#FFA940', '#64B5F6', '#FF6B6B', '#4ADE80', '#9CA3AF', '#38BDF8', '#FACC15', '#A78BFA']
+    success: '#FC8E78',
+    cyan: '#48D1E8',
+    coral: '#FC8E78',
+    chart: ['#38A3D6', '#8ECAE6', '#48D1E8', '#FC8E78', '#FC5A6E', '#D06090', '#9CA3AF', '#5CC4E0']
   };
 
   const SECTION_TITLES = {
@@ -43,6 +47,8 @@
     location: 'Ubicacion',
     devices: 'Dispositivos',
     browsers: 'Navegadores',
+    conversiones: 'Conversiones',
+    ecommerce: 'E-commerce',
     settings: 'Configuracion'
   };
 
@@ -418,6 +424,12 @@
         break;
       case 'browsers':
         loadBrowsersDetail();
+        break;
+      case 'conversiones':
+        loadConversiones();
+        break;
+      case 'ecommerce':
+        loadEcommerce();
         break;
       case 'settings':
         loadSettingsUI();
@@ -1044,7 +1056,7 @@
     html += '<span class="heatmap-legend-label">Menos</span>';
     html += '<div class="heatmap-legend-scale">';
     for (let i = 0; i <= 10; i++) {
-      const colors = ['#e5e5e5', '#ffe5cc', '#ffcc99', '#ffb366', '#ff9933', '#F7941D', '#e5850f', '#cc7300', '#b36300', '#E31E24', '#b31519'];
+      const colors = ['#DDDDDD', '#CAF0F8', '#90E0EF', '#48CAE4', '#00B4D8', '#0096C7', '#0077B6', '#005f92', '#03045E', '#FC6E50', '#FC3A54'];
       html += `<div class="heatmap-legend-item" style="background: ${colors[i]}"></div>`;
     }
     html += '</div>';
@@ -1194,6 +1206,206 @@
       console.error('Error loading clicks detail:', error);
     }
     showLoading('clicks-detail', false);
+  }
+
+  // ============================================
+  // Conversiones Section
+  // ============================================
+  async function loadConversiones() {
+    showLoading('conversiones');
+    showLoading('conversions-trend');
+    try {
+      const [data, trend] = await Promise.all([
+        fetchAPI('/conversions', {
+          siteId: state.siteId,
+          startDate: state.startDate,
+          endDate: state.endDate
+        }),
+        fetchAPI('/conversions/trend', {
+          siteId: state.siteId,
+          startDate: state.startDate,
+          endDate: state.endDate
+        })
+      ]);
+
+      // Summary cards
+      document.getElementById('metric-form-submits').textContent = formatNumber(data.formSubmits);
+      document.getElementById('metric-form-rate').textContent = data.formRate > 0 ? '(' + data.formRate + '% tasa)' : '';
+      document.getElementById('metric-whatsapp-clicks').textContent = formatNumber(data.whatsappClicks);
+      document.getElementById('metric-total-conversions').textContent = formatNumber(data.totalConversions);
+
+      // Top forms table
+      renderTable('table-conversions-forms', data.topForms, row => `
+        <td>${row.formId || '-'}</td>
+        <td class="num">${formatNumber(row.submits)}</td>
+        <td class="num">${formatNumber(row.starts)}</td>
+        <td class="num">${row.rate}%</td>
+      `);
+
+      // Top phones table
+      renderTable('table-conversions-phones', data.topPhones, row => `
+        <td>${row.phoneNumber || '-'}</td>
+        <td class="num">${formatNumber(row.clicks)}</td>
+      `);
+
+      // Trend chart
+      renderConversionsTrendChart(trend);
+    } catch (error) {
+      console.error('Error loading conversiones:', error);
+    }
+    showLoading('conversiones', false);
+    showLoading('conversions-trend', false);
+  }
+
+  function renderConversionsTrendChart(data) {
+    const ctx = document.getElementById('chart-conversions-trend');
+    if (!ctx) return;
+
+    if (state.charts.conversionsTrend) state.charts.conversionsTrend.destroy();
+
+    const labels = data.map(d => {
+      const date = new Date(d.date);
+      return date.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' });
+    });
+
+    state.charts.conversionsTrend = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          {
+            label: 'Formularios',
+            data: data.map(d => d.formSubmits),
+            borderColor: COLORS.success,
+            backgroundColor: COLORS.success + '20',
+            fill: true,
+            tension: 0.4,
+            borderWidth: 3,
+            pointRadius: 4,
+            pointBackgroundColor: COLORS.success
+          },
+          {
+            label: 'WhatsApp',
+            data: data.map(d => d.whatsappClicks),
+            borderColor: '#25D366',
+            backgroundColor: '#25D36620',
+            fill: true,
+            tension: 0.4,
+            borderWidth: 3,
+            pointRadius: 4,
+            pointBackgroundColor: '#25D366'
+          },
+          {
+            label: 'Total',
+            data: data.map(d => d.total),
+            borderColor: COLORS.primary,
+            backgroundColor: 'transparent',
+            borderDash: [5, 5],
+            fill: false,
+            tension: 0.4,
+            borderWidth: 2,
+            pointRadius: 0
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'top' },
+          datalabels: { display: false }
+        },
+        scales: {
+          y: { beginAtZero: true, ticks: { precision: 0 } }
+        }
+      }
+    });
+  }
+
+  // ============================================
+  // E-commerce Section
+  // ============================================
+  async function loadEcommerce() {
+    showLoading('ecommerce');
+    try {
+      const [funnel, products] = await Promise.all([
+        fetchAPI('/ecommerce/funnel', {
+          siteId: state.siteId,
+          startDate: state.startDate,
+          endDate: state.endDate
+        }),
+        fetchAPI('/ecommerce/products', {
+          siteId: state.siteId,
+          startDate: state.startDate,
+          endDate: state.endDate
+        })
+      ]);
+
+      // Render funnel
+      renderEcommerceFunnel(funnel);
+
+      // Revenue cards
+      document.getElementById('metric-revenue').textContent = '$' + formatNumber(Math.round(funnel.revenue));
+      document.getElementById('metric-avg-ticket').textContent = '$' + formatNumber(funnel.avgTicket);
+
+      // Products tables
+      renderTable('table-products-viewed', products.mostViewed, row => `
+        <td title="${row.productId}"><span class="text-truncate">${truncateText(row.productName, 35)}</span></td>
+        <td class="num">${formatNumber(row.views)}</td>
+      `);
+
+      renderTable('table-products-added', products.mostAdded, row => `
+        <td title="${row.productId}"><span class="text-truncate">${truncateText(row.productName, 35)}</span></td>
+        <td class="num">${formatNumber(row.adds)}</td>
+      `);
+    } catch (error) {
+      console.error('Error loading ecommerce:', error);
+    }
+    showLoading('ecommerce', false);
+  }
+
+  function renderEcommerceFunnel(data) {
+    const container = document.getElementById('ecommerce-funnel');
+    if (!container) return;
+
+    const steps = [
+      { label: 'Ver Producto', key: 'viewProduct', color: COLORS.primary },
+      { label: 'Agregar al Carrito', key: 'addToCart', color: COLORS.navy },
+      { label: 'Iniciar Checkout', key: 'beginCheckout', color: '#17a2b8' },
+      { label: 'Compra', key: 'purchase', color: COLORS.success }
+    ];
+
+    const maxVal = Math.max(...steps.map(s => data[s.key]), 1);
+    let html = '';
+
+    steps.forEach((step, i) => {
+      const count = data[step.key];
+      const height = Math.max(Math.round((count / maxVal) * 80), 30);
+
+      html += `
+        <div class="funnel-step">
+          <div class="funnel-step-bar" style="background: ${step.color}; height: ${height}px;">
+            ${formatNumber(count)}
+          </div>
+          <span class="funnel-step-label">${step.label}</span>
+        </div>
+      `;
+
+      if (i < steps.length - 1) {
+        const nextCount = data[steps[i + 1].key];
+        const dropPct = count > 0 ? Math.round((1 - nextCount / count) * 100) : 0;
+        html += `
+          <div class="funnel-arrow">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
+            <span class="funnel-drop">-${dropPct}%</span>
+          </div>
+        `;
+      }
+    });
+
+    container.innerHTML = html;
   }
 
   async function loadLocation() {
@@ -2184,19 +2396,19 @@
     const styles = `
       <style>
         body { font-family: Calibri, Arial, sans-serif; }
-        .header { background: #1E3A5F; color: white; font-size: 18px; font-weight: bold; padding: 15px; }
-        .subheader { background: #F7941D; color: white; font-size: 14px; padding: 10px; }
-        .info { background: #f5f5f5; padding: 8px; font-size: 12px; }
-        .section-title { background: #1E3A5F; color: white; font-size: 14px; font-weight: bold; padding: 10px; margin-top: 20px; }
+        .header { background: #03045E; color: white; font-size: 18px; font-weight: bold; padding: 15px; }
+        .subheader { background: #0077B6; color: white; font-size: 14px; padding: 10px; }
+        .info { background: #F8F9FA; padding: 8px; font-size: 12px; }
+        .section-title { background: #03045E; color: white; font-size: 14px; font-weight: bold; padding: 10px; margin-top: 20px; }
         table { border-collapse: collapse; width: 100%; margin-bottom: 25px; }
-        th { background: #F7941D; color: white; padding: 10px; text-align: left; font-weight: bold; border: 1px solid #ddd; }
+        th { background: #0077B6; color: white; padding: 10px; text-align: left; font-weight: bold; border: 1px solid #ddd; }
         td { padding: 8px; border: 1px solid #ddd; }
         tr:nth-child(even) { background: #f9f9f9; }
         .num { text-align: right; }
-        .metric-value { font-size: 24px; font-weight: bold; color: #1E3A5F; }
-        .metric-label { color: #666; font-size: 11px; }
+        .metric-value { font-size: 24px; font-weight: bold; color: #03045E; }
+        .metric-label { color: #6c757d; font-size: 11px; }
         .summary-table td { border: none; padding: 5px 15px; }
-        .summary-table { background: #f5f7fa; }
+        .summary-table { background: #F8F9FA; }
       </style>
     `;
 
@@ -2375,12 +2587,14 @@
 
     // Update colors
     COLORS = theme === 'dark' ? { ...COLORS_DARK } : {
-      primary: '#F7941D',
-      secondary: '#E31E24',
-      navy: '#1E3A5F',
-      gray: '#666666',
-      success: '#28a745',
-      chart: ['#F7941D', '#1E3A5F', '#E31E24', '#28a745', '#6c757d', '#17a2b8', '#ffc107', '#6610f2']
+      primary: '#0077B6',
+      secondary: '#FC3A54',
+      navy: '#03045E',
+      gray: '#6c757d',
+      success: '#FC6E50',
+      cyan: '#00B4D8',
+      coral: '#FC6E50',
+      chart: ['#0077B6', '#03045E', '#00B4D8', '#FC6E50', '#FC3A54', '#AC1C54', '#261C3C', '#0096C7']
     };
 
     // Update theme toggle icons
