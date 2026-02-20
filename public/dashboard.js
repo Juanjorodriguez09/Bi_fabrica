@@ -189,6 +189,7 @@
   // Utilities
   // ============================================
   function formatNumber(num) {
+    if (num == null) return '0';
     if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
     if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
     return num.toLocaleString('es-ES');
@@ -1425,7 +1426,7 @@
       // Countries table
       renderTable('table-countries', data.countries, row => `
         <td>${row.name}</td>
-        <td class="num">${formatNumber(row.visitors)}</td>
+        <td class="num">${formatNumber(row.visitors || row.sessions)}</td>
         <td class="num">${row.percentage}%</td>
       `);
 
@@ -1434,7 +1435,7 @@
         <td>${row.city}</td>
         <td>${row.region || '-'}</td>
         <td>${row.countryName || row.countryCode}</td>
-        <td class="num">${formatNumber(row.visitors)}</td>
+        <td class="num">${formatNumber(row.visitors || row.sessions)}</td>
       `);
     } catch (error) {
       console.error('Error loading location:', error);
