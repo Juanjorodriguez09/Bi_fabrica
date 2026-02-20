@@ -980,6 +980,220 @@ async function getFunnelData(siteId, startDate, endDate) {
   };
 }
 
+// ============================================
+// Conversiones
+// ============================================
+
+async function getConversionsData(siteId, startDate, endDate) {
+  const start = new Date(startDate + 'T00:00:00.000Z');
+  const end = new Date(endDate + 'T23:59:59.999Z');
+
+  const [formCounts, whatsappClicks, topPhones, topForms] = await Promise.all([
+    // form_submit y form_start counts
+    prisma.$queryRaw`
+      SELECT
+        event_type,
+        COUNT(*) as count
+      FROM event
+      WHERE site_id = ${siteId}
+        AND occurred_at >= ${start}
+        AND occurred_at <= ${end}
+        AND event_type IN ('form_submit', 'form_start')
+      GROUP BY event_type
+    `,
+    // whatsapp_click count
+    prisma.$queryRaw`
+      SELECT COUNT(*) as count
+      FROM event
+      WHERE site_id = ${siteId}
+        AND occurred_at >= ${start}
+        AND occurred_at <= ${end}
+        AND event_type = 'whatsapp_click'
+    `,
+    // Top números contactados
+    prisma.$queryRaw`
+      SELECT
+        meta_data->>'phoneNumber' as phone_number,
+        COUNT(*) as clicks
+      FROM event
+      WHERE site_id = ${siteId}
+        AND occurred_at >= ${start}
+        AND occurred_at <= ${end}
+        AND event_type = 'whatsapp_click'
+        AND meta_data->>'phoneNumber' IS NOT NULL
+      GROUP BY phone_number
+      ORDER BY clicks DESC
+      LIMIT 10
+    `,
+    // Top formularios
+    prisma.$queryRaw`
+      SELECT
+        meta_data->>'formId' as form_id,
+        COUNT(*) FILTER (WHERE event_type = 'form_submit') as submits,
+        COUNT(*) FILTER (WHERE event_type = 'form_start') as starts
+      FROM event
+      WHERE site_id = ${siteId}
+        AND occurred_at >= ${start}
+        AND occurred_at <= ${end}
+        AND event_type IN ('form_submit', 'form_start')
+        AND meta_data->>'formId' IS NOT NULL
+      GROUP BY form_id
+      ORDER BY submits DESC
+      LIMIT 10
+    `
+  ]);
+
+  const formSubmit = formCounts.find(e => e.event_type === 'form_submit');
+  const formStart = formCounts.find(e => e.event_type === 'form_start');
+  const totalSubmits = Number(formSubmit?.count || 0);
+  const totalStarts = Number(formStart?.count || 0);
+  const totalWhatsapp = Number(whatsappClicks[0]?.count || 0);
+
+  return {
+    formSubmits: totalSubmits,
+    formStarts: totalStarts,
+    formRate: totalStarts > 0 ? Math.round((totalSubmits / totalStarts) * 100) : 0,
+    whatsappClicks: totalWhatsapp,
+    totalConversions: totalSubmits + totalWhatsapp,
+    topPhones: topPhones.map(p => ({
+      phoneNumber: p.phone_number,
+      clicks: Number(p.clicks)
+    })),
+    topForms: topForms.map(f => ({
+      formId: f.form_id,
+      submits: Number(f.submits),
+      starts: Number(f.starts),
+      rate: Number(f.starts) > 0 ? Math.round((Number(f.submits) / Number(f.starts)) * 100) : 0
+    }))
+  };
+}
+
+async function getConversionsTrend(siteId, startDate, endDate) {
+  const start = new Date(startDate + 'T00:00:00.000Z');
+  const end = new Date(endDate + 'T23:59:59.999Z');
+
+  const trend = await prisma.$queryRaw`
+    SELECT
+      DATE(occurred_at) as date,
+      COUNT(*) FILTER (WHERE event_type = 'form_submit') as form_submits,
+      COUNT(*) FILTER (WHERE event_type = 'whatsapp_click') as whatsapp_clicks
+    FROM event
+    WHERE site_id = ${siteId}
+      AND occurred_at >= ${start}
+      AND occurred_at <= ${end}
+      AND event_type IN ('form_submit', 'whatsapp_click')
+    GROUP BY DATE(occurred_at)
+    ORDER BY date
+  `;
+
+  return trend.map(t => ({
+    date: t.date.toISOString().split('T')[0],
+    formSubmits: Number(t.form_submits),
+    whatsappClicks: Number(t.whatsapp_clicks),
+    total: Number(t.form_submits) + Number(t.whatsapp_clicks)
+  }));
+}
+
+// ============================================
+// E-commerce / Funnel
+// ============================================
+
+async function getEcommerceFunnel(siteId, startDate, endDate) {
+  const start = new Date(startDate + 'T00:00:00.000Z');
+  const end = new Date(endDate + 'T23:59:59.999Z');
+
+  const [funnelCounts, revenueTotals] = await Promise.all([
+    prisma.$queryRaw`
+      SELECT
+        event_type,
+        COUNT(*) as count
+      FROM event
+      WHERE site_id = ${siteId}
+        AND occurred_at >= ${start}
+        AND occurred_at <= ${end}
+        AND event_type IN ('view_product', 'add_to_cart', 'begin_checkout', 'purchase')
+      GROUP BY event_type
+    `,
+    prisma.$queryRaw`
+      SELECT
+        COALESCE(SUM((meta_data->>'total')::numeric), 0) as revenue,
+        COALESCE(AVG((meta_data->>'total')::numeric), 0) as avg_ticket,
+        COUNT(*) as purchase_count
+      FROM event
+      WHERE site_id = ${siteId}
+        AND occurred_at >= ${start}
+        AND occurred_at <= ${end}
+        AND event_type = 'purchase'
+        AND meta_data->>'total' IS NOT NULL
+    `
+  ]);
+
+  const getCount = (type) => {
+    const found = funnelCounts.find(e => e.event_type === type);
+    return Number(found?.count || 0);
+  };
+
+  return {
+    viewProduct: getCount('view_product'),
+    addToCart: getCount('add_to_cart'),
+    beginCheckout: getCount('begin_checkout'),
+    purchase: getCount('purchase'),
+    revenue: Number(revenueTotals[0]?.revenue || 0),
+    avgTicket: Math.round(Number(revenueTotals[0]?.avg_ticket || 0) * 100) / 100
+  };
+}
+
+async function getTopProducts(siteId, startDate, endDate, limit = 10) {
+  const start = new Date(startDate + 'T00:00:00.000Z');
+  const end = new Date(endDate + 'T23:59:59.999Z');
+
+  const [mostViewed, mostAdded] = await Promise.all([
+    prisma.$queryRaw`
+      SELECT
+        meta_data->>'productId' as product_id,
+        meta_data->>'productName' as product_name,
+        COUNT(*) as views
+      FROM event
+      WHERE site_id = ${siteId}
+        AND occurred_at >= ${start}
+        AND occurred_at <= ${end}
+        AND event_type = 'view_product'
+        AND meta_data->>'productId' IS NOT NULL
+      GROUP BY product_id, product_name
+      ORDER BY views DESC
+      LIMIT ${limit}
+    `,
+    prisma.$queryRaw`
+      SELECT
+        meta_data->>'productId' as product_id,
+        meta_data->>'productName' as product_name,
+        COUNT(*) as adds
+      FROM event
+      WHERE site_id = ${siteId}
+        AND occurred_at >= ${start}
+        AND occurred_at <= ${end}
+        AND event_type = 'add_to_cart'
+        AND meta_data->>'productId' IS NOT NULL
+      GROUP BY product_id, product_name
+      ORDER BY adds DESC
+      LIMIT ${limit}
+    `
+  ]);
+
+  return {
+    mostViewed: mostViewed.map(p => ({
+      productId: p.product_id,
+      productName: p.product_name || p.product_id,
+      views: Number(p.views)
+    })),
+    mostAdded: mostAdded.map(p => ({
+      productId: p.product_id,
+      productName: p.product_name || p.product_id,
+      adds: Number(p.adds)
+    }))
+  };
+}
+
 module.exports = {
   getSummary,
   getEventsByType,
@@ -1001,5 +1215,9 @@ module.exports = {
   getHeatmapData,
   getSummaryCompare,
   getAdvancedMetrics,
-  getFunnelData
+  getFunnelData,
+  getConversionsData,
+  getConversionsTrend,
+  getEcommerceFunnel,
+  getTopProducts
 };

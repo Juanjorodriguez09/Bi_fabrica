@@ -388,6 +388,75 @@ async function getFunnel(req, res, next) {
   }
 }
 
+// GET /api/v1/dashboard/conversions
+async function getConversions(req, res, next) {
+  try {
+    const siteId = parseInt(req.query.siteId);
+    if (!siteId) {
+      return res.status(400).json({ success: false, error: 'siteId is required' });
+    }
+
+    const { startDate, endDate } = parseDateRange(req);
+    const data = await dashboardService.getConversionsData(siteId, startDate, endDate);
+
+    res.json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+}
+
+// GET /api/v1/dashboard/conversions/trend
+async function getConversionsTrend(req, res, next) {
+  try {
+    const siteId = parseInt(req.query.siteId);
+    if (!siteId) {
+      return res.status(400).json({ success: false, error: 'siteId is required' });
+    }
+
+    const { startDate, endDate } = parseDateRange(req);
+    const data = await dashboardService.getConversionsTrend(siteId, startDate, endDate);
+
+    res.json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+}
+
+// GET /api/v1/dashboard/ecommerce/funnel
+async function getEcommerceFunnel(req, res, next) {
+  try {
+    const siteId = parseInt(req.query.siteId);
+    if (!siteId) {
+      return res.status(400).json({ success: false, error: 'siteId is required' });
+    }
+
+    const { startDate, endDate } = parseDateRange(req);
+    const data = await dashboardService.getEcommerceFunnel(siteId, startDate, endDate);
+
+    res.json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+}
+
+// GET /api/v1/dashboard/ecommerce/products
+async function getTopProducts(req, res, next) {
+  try {
+    const siteId = parseInt(req.query.siteId);
+    if (!siteId) {
+      return res.status(400).json({ success: false, error: 'siteId is required' });
+    }
+
+    const { startDate, endDate } = parseDateRange(req);
+    const limit = parseInt(req.query.limit) || 10;
+    const data = await dashboardService.getTopProducts(siteId, startDate, endDate, limit);
+
+    res.json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+}
+
 module.exports = {
   getSites,
   getSummary,
@@ -409,5 +478,9 @@ module.exports = {
   getHeatmap,
   getSummaryCompare,
   getAdvancedMetrics,
-  getFunnel
+  getFunnel,
+  getConversions,
+  getConversionsTrend,
+  getEcommerceFunnel,
+  getTopProducts
 };

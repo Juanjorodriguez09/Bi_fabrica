@@ -71,4 +71,12 @@ router.get('/metrics/advanced', dashboardController.getAdvancedMetrics);
 // Embudo de conversion
 router.get('/funnel', dashboardController.getFunnel);
 
+// Conversiones
+router.get('/conversions', dashboardController.getConversions);
+router.get('/conversions/trend', dashboardController.getConversionsTrend);
+
+// E-commerce
+router.get('/ecommerce/funnel', dashboardController.getEcommerceFunnel);
+router.get('/ecommerce/products', dashboardController.getTopProducts);
+
 module.exports = router;
