@@ -79,4 +79,7 @@ router.get('/conversions/trend', dashboardController.getConversionsTrend);
 router.get('/ecommerce/funnel', dashboardController.getEcommerceFunnel);
 router.get('/ecommerce/products', dashboardController.getTopProducts);
 
+// Reporte de visitas por seccion
+router.get('/sections', dashboardController.getSectionReport);
+
 module.exports = router;

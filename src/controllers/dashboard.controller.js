@@ -457,6 +457,24 @@ async function getTopProducts(req, res, next) {
   }
 }
 
+// GET /api/v1/dashboard/sections
+async function getSectionReport(req, res, next) {
+  try {
+    const siteId = parseInt(req.query.siteId);
+    if (!siteId) {
+      return res.status(400).json({ success: false, error: 'siteId is required' });
+    }
+
+    const { startDate, endDate } = parseDateRange(req);
+    const limit = parseInt(req.query.limit) || 20;
+    const data = await dashboardService.getSectionReport(siteId, startDate, endDate, limit);
+
+    res.json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+}
+
 module.exports = {
   getSites,
   getSummary,
@@ -482,5 +500,6 @@ module.exports = {
   getConversions,
   getConversionsTrend,
   getEcommerceFunnel,
-  getTopProducts
+  getTopProducts,
+  getSectionReport
 };

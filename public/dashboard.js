@@ -42,6 +42,7 @@
     sources: 'Fuentes de Trafico',
     utms: 'Campanas UTM',
     pages: 'Paginas',
+    sections: 'Secciones Web',
     events: 'Eventos',
     clicks: 'Clicks',
     location: 'Ubicacion',
@@ -409,6 +410,9 @@
         break;
       case 'pages':
         loadPagesDetail();
+        break;
+      case 'sections':
+        loadSectionsReport();
         break;
       case 'events':
         loadEventsDetail();
@@ -1421,24 +1425,50 @@
       // Countries table
       renderTable('table-countries', data.countries, row => `
         <td>${row.name}</td>
-        <td class="num">${formatNumber(row.sessions)}</td>
+        <td class="num">${formatNumber(row.visitors)}</td>
         <td class="num">${row.percentage}%</td>
       `);
 
-      // Cities table
+      // Cities table (con region y country name)
       renderTable('table-cities', data.cities, row => `
         <td>${row.city}</td>
-        <td>${row.countryCode}</td>
-        <td class="num">${formatNumber(row.sessions)}</td>
+        <td>${row.region || '-'}</td>
+        <td>${row.countryName || row.countryCode}</td>
+        <td class="num">${formatNumber(row.visitors)}</td>
       `);
     } catch (error) {
       console.error('Error loading location:', error);
-      // Show empty state
       renderTable('table-countries', [], () => '');
       renderTable('table-cities', [], () => '');
     }
     showLoading('countries', false);
     showLoading('cities', false);
+  }
+
+  // ============================================
+  // Reporte de Secciones Web
+  // ============================================
+
+  async function loadSectionsReport() {
+    showLoading('sections-report');
+    try {
+      const data = await fetchAPI('/sections', {
+        siteId: state.siteId,
+        startDate: state.startDate,
+        endDate: state.endDate
+      });
+
+      renderTable('table-sections-report', data, row => `
+        <td>${row.pagePath}</td>
+        <td class="num">${formatNumber(row.views)}</td>
+        <td class="num">${formatNumber(row.uniqueVisitors)}</td>
+        <td class="num">${row.percentage}%</td>
+      `);
+    } catch (error) {
+      console.error('Error loading sections report:', error);
+      renderTable('table-sections-report', [], () => '');
+    }
+    showLoading('sections-report', false);
   }
 
   async function loadDevicesDetail() {

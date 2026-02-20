@@ -566,22 +566,14 @@ async function getTrafficSources(siteId, startDate, endDate) {
 
   const sources = await prisma.$queryRaw`
     SELECT
-      CASE
-        WHEN utm_source IS NOT NULL THEN utm_source
-        WHEN referrer IS NOT NULL AND referrer != '' THEN 'Referral'
-        ELSE 'Direct'
-      END as source,
-      CASE
-        WHEN utm_medium IS NOT NULL THEN utm_medium
-        WHEN referrer IS NOT NULL AND referrer != '' THEN 'referral'
-        ELSE '(none)'
-      END as medium,
+      COALESCE(traffic_source, 'Direct') as source,
+      COALESCE(traffic_medium, '(none)') as medium,
       COUNT(*) as sessions
     FROM session
     WHERE site_id = ${siteId}
       AND started_at >= ${start}
       AND started_at <= ${end}
-    GROUP BY source, medium
+    GROUP BY traffic_source, traffic_medium
     ORDER BY sessions DESC
   `;
 
@@ -603,50 +595,56 @@ async function getLocationData(siteId, startDate, endDate) {
   const start = new Date(startDate + 'T00:00:00.000Z');
   const end = new Date(endDate + 'T23:59:59.999Z');
 
-  // Obtener países
+  // Obtener países (visitantes únicos)
   const countries = await prisma.$queryRaw`
     SELECT
       COALESCE(gc.country_code, 'XX') as country_code,
       COALESCE(gc.country_name, 'Desconocido') as country_name,
-      COUNT(DISTINCT s.id) as sessions
+      COUNT(DISTINCT s.visitor_id) as visitors
     FROM session s
-    LEFT JOIN geo_cache gc ON gc.ip_address = s.ip_address
+    JOIN geo_cache gc ON gc.ip_address = s.ip_address
     WHERE s.site_id = ${siteId}
       AND s.started_at >= ${start}
       AND s.started_at <= ${end}
+      AND gc.country_code IS NOT NULL
     GROUP BY gc.country_code, gc.country_name
-    ORDER BY sessions DESC
+    ORDER BY visitors DESC
   `;
 
-  // Obtener ciudades (top 20)
+  // Obtener ciudades con region (top 20, solo ciudades conocidas)
   const cities = await prisma.$queryRaw`
     SELECT
-      COALESCE(gc.city, 'Desconocida') as city,
-      COALESCE(gc.country_code, 'XX') as country_code,
-      COUNT(DISTINCT s.id) as sessions
+      gc.city,
+      gc.region,
+      gc.country_name,
+      gc.country_code,
+      COUNT(DISTINCT s.visitor_id) as visitors
     FROM session s
-    LEFT JOIN geo_cache gc ON gc.ip_address = s.ip_address
+    JOIN geo_cache gc ON gc.ip_address = s.ip_address
     WHERE s.site_id = ${siteId}
       AND s.started_at >= ${start}
       AND s.started_at <= ${end}
-    GROUP BY gc.city, gc.country_code
-    ORDER BY sessions DESC
+      AND gc.city IS NOT NULL
+    GROUP BY gc.city, gc.region, gc.country_name, gc.country_code
+    ORDER BY visitors DESC
     LIMIT 20
   `;
 
-  const totalSessions = countries.reduce((sum, c) => sum + Number(c.sessions), 0);
+  const totalVisitors = countries.reduce((sum, c) => sum + Number(c.visitors), 0);
 
   return {
     countries: countries.map(c => ({
       code: c.country_code,
       name: c.country_name,
-      sessions: Number(c.sessions),
-      percentage: totalSessions > 0 ? Math.round((Number(c.sessions) / totalSessions) * 100) : 0
+      visitors: Number(c.visitors),
+      percentage: totalVisitors > 0 ? Math.round((Number(c.visitors) / totalVisitors) * 100) : 0
     })),
     cities: cities.map(c => ({
       city: c.city,
+      region: c.region,
+      countryName: c.country_name,
       countryCode: c.country_code,
-      sessions: Number(c.sessions)
+      visitors: Number(c.visitors)
     }))
   };
 }
@@ -738,19 +736,13 @@ async function getRealtimeDetailed(siteId, minutes = 30) {
   // Fuentes de tráfico en tiempo real
   const bySources = await prisma.$queryRaw`
     SELECT
-      CASE
-        WHEN utm_source IS NOT NULL THEN utm_source
-        ELSE 'Direct'
-      END as source,
-      CASE
-        WHEN utm_medium IS NOT NULL THEN utm_medium
-        ELSE '(none)'
-      END as medium,
+      COALESCE(traffic_source, 'Direct') as source,
+      COALESCE(traffic_medium, '(none)') as medium,
       COUNT(*) as sessions
     FROM session
     WHERE site_id = ${siteId}
       AND started_at >= ${since}
-    GROUP BY source, medium
+    GROUP BY traffic_source, traffic_medium
     ORDER BY sessions DESC
     LIMIT 10
   `;
@@ -1194,6 +1186,40 @@ async function getTopProducts(siteId, startDate, endDate, limit = 10) {
   };
 }
 
+// ============================================
+// Visitas por seccion de la web (page_path report)
+// ============================================
+
+async function getSectionReport(siteId, startDate, endDate, limit = 20) {
+  const start = new Date(startDate + 'T00:00:00.000Z');
+  const end = new Date(endDate + 'T23:59:59.999Z');
+
+  const sections = await prisma.$queryRaw`
+    SELECT
+      page_path,
+      COUNT(*) as views,
+      COUNT(DISTINCT visitor_id) as unique_visitors
+    FROM event
+    WHERE site_id = ${siteId}
+      AND event_type = 'pageview'
+      AND occurred_at >= ${start}
+      AND occurred_at <= ${end}
+      AND page_path IS NOT NULL
+    GROUP BY page_path
+    ORDER BY views DESC
+    LIMIT ${limit}
+  `;
+
+  const totalViews = sections.reduce((sum, s) => sum + Number(s.views), 0);
+
+  return sections.map(s => ({
+    pagePath: s.page_path,
+    views: Number(s.views),
+    uniqueVisitors: Number(s.unique_visitors),
+    percentage: totalViews > 0 ? Math.round((Number(s.views) / totalViews) * 100 * 10) / 10 : 0
+  }));
+}
+
 module.exports = {
   getSummary,
   getEventsByType,
@@ -1219,5 +1245,6 @@ module.exports = {
   getConversionsData,
   getConversionsTrend,
   getEcommerceFunnel,
-  getTopProducts
+  getTopProducts,
+  getSectionReport
 };

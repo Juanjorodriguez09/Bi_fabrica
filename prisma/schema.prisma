@@ -100,6 +100,8 @@ model session {
   utm_id               String?     @db.VarChar(255)
   utm_marketing_tactic String?     @db.VarChar(100)
   utm_source_platform  String?     @db.VarChar(100)
+  traffic_medium       String?     @db.VarChar(255)
+  traffic_source       String?     @db.VarChar(255)
   event                event[]
   site_config          site_config @relation(fields: [site_id], references: [id])
   visitor              visitor     @relation(fields: [visitor_id], references: [id])
@@ -107,6 +109,7 @@ model session {
   @@unique([site_id, session_uuid])
   @@index([site_id, started_at])
   @@index([visitor_id])
+  @@index([site_id, traffic_source])
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.

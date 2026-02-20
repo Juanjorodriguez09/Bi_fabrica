@@ -80,6 +80,7 @@
           </a>
           <ul class="nav-submenu" id="submenu-interaccion">
             <li><a href="#" class="nav-link" data-section="pages">Paginas</a></li>
+            <li><a href="#" class="nav-link" data-section="sections">Secciones Web</a></li>
             <li><a href="#" class="nav-link" data-section="events">Eventos</a></li>
             <li><a href="#" class="nav-link" data-section="clicks">Clicks</a></li>
           </ul>
@@ -1053,7 +1054,7 @@
                 <thead>
                   <tr>
                     <th>Pais</th>
-                    <th class="num">Sesiones</th>
+                    <th class="num">Visitantes</th>
                     <th class="num">%</th>
                   </tr>
                 </thead>
@@ -1072,8 +1073,9 @@
                 <thead>
                   <tr>
                     <th>Ciudad</th>
+                    <th>Region</th>
                     <th>Pais</th>
-                    <th class="num">Sesiones</th>
+                    <th class="num">Visitantes</th>
                   </tr>
                 </thead>
                 <tbody></tbody>
@@ -1158,6 +1160,31 @@
                 <tbody></tbody>
               </table>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section: Secciones Web -->
+      <section class="content-section" id="section-sections" style="display: none;">
+        <div class="section-grid">
+          <div class="card table-card" style="grid-column: 1 / -1;">
+            <div class="card-header">
+              <h3>Visitas por Seccion de la Web</h3>
+            </div>
+            <div class="table-container">
+              <table class="data-table" id="table-sections-report">
+                <thead>
+                  <tr>
+                    <th>Pagina</th>
+                    <th class="num">Vistas</th>
+                    <th class="num">Visitantes Unicos</th>
+                    <th class="num">% del Total</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <div class="table-loading" id="loading-sections-report">Cargando...</div>
           </div>
         </div>
       </section>
