@@ -3245,6 +3245,10 @@
     }
   }
 
+  function updateGoalsProgress() {
+    if (!state.goals || !exportData.summary) return;
+  }
+
   // ============================================
   // Initialize
   // ============================================
