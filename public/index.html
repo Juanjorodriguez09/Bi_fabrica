@@ -16,7 +16,7 @@
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-header">
       <div class="logo">
-        <img src="logo_micomercio.svg" alt="micomercio" style="height: 32px; width: auto;">
+        <img src="logo_micomercio.svg" alt="micomercio" style="height: 48px; width: auto;">
       </div>
       <button class="btn-collapse-sidebar" id="btn-collapse-sidebar" title="Colapsar menu">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -62,7 +62,6 @@
           </a>
           <ul class="nav-submenu" id="submenu-adquisicion">
             <li><a href="#" class="nav-link" data-section="sources">Fuentes de trafico</a></li>
-            <li><a href="#" class="nav-link" data-section="utms">Campanas UTM</a></li>
           </ul>
         </li>
         <li class="nav-item has-submenu">
@@ -294,7 +293,7 @@
       </div>
       <div class="filters-row filters-row-advanced" id="advanced-filters" style="display: none;">
         <div class="filter-group">
-          <label for="filter-device">Dispositivo</label>
+          <label for="filter-device">Disp.</label>
           <select id="filter-device" class="filter-select filter-select-sm">
             <option value="">Todos</option>
             <option value="desktop">Desktop</option>
@@ -303,7 +302,7 @@
           </select>
         </div>
         <div class="filter-group">
-          <label for="filter-browser">Navegador</label>
+          <label for="filter-browser">Nav.</label>
           <select id="filter-browser" class="filter-select filter-select-sm">
             <option value="">Todos</option>
           </select>
@@ -312,6 +311,12 @@
           <label for="filter-country">Pais</label>
           <select id="filter-country" class="filter-select filter-select-sm">
             <option value="">Todos</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label for="filter-city">Ciudad</label>
+          <select id="filter-city" class="filter-select filter-select-sm">
+            <option value="">Todas</option>
           </select>
         </div>
         <div class="filter-group">
@@ -326,12 +331,12 @@
           </select>
         </div>
         <div class="filter-group">
-          <label for="filter-utm-campaign">Campana UTM</label>
+          <label for="filter-utm-campaign">UTM</label>
           <select id="filter-utm-campaign" class="filter-select filter-select-sm">
             <option value="">Todas</option>
           </select>
         </div>
-        <button class="btn-clear-filters" id="btn-clear-filters">Limpiar filtros</button>
+        <button class="btn-clear-filters" id="btn-clear-filters">Limpiar</button>
       </div>
     </div>
 
@@ -437,17 +442,7 @@
                   <line x1="9" y1="3" x2="9" y2="21"/>
                 </svg>
               </button>
-              <button class="btn-annotations" id="btn-annotations" title="Ver anotaciones">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                </svg>
-              </button>
-              <button class="btn-add-annotation" id="btn-add-annotation" title="Agregar anotacion">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <line x1="12" y1="5" x2="12" y2="19"/>
-                  <line x1="5" y1="12" x2="19" y2="12"/>
-                </svg>
-              </button>
+
               <select id="filter-trend-metric" class="card-filter-select">
                 <option value="all">Todas las metricas</option>
                 <option value="pageviews">Pageviews</option>
@@ -752,6 +747,36 @@
             <div class="table-loading" id="loading-utms">Cargando...</div>
           </div>
         </div>
+
+        <!-- Nuevos vs Recurrentes -->
+        <div class="card table-card collapsible" data-section-id="visitors-type" style="margin-top: 24px;">
+          <div class="card-header" data-collapse-toggle>
+            <h3>Nuevos vs Recurrentes</h3>
+          </div>
+          <div class="table-container">
+            <table class="data-table" id="table-visitors-type">
+              <thead>
+                <tr>
+                  <th>Tipo de Visitante</th>
+                  <th class="num">Visitantes</th>
+                  <th class="num">Porcentaje</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Nuevos</td>
+                  <td class="num" id="metric-new-visitors">-</td>
+                  <td class="num" id="metric-new-visitors-pct">-</td>
+                </tr>
+                <tr>
+                  <td>Recurrentes</td>
+                  <td class="num" id="metric-returning-visitors">-</td>
+                  <td class="num" id="metric-returning-visitors-pct">-</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </section>
 
       <!-- Section: Tiempo Real -->
@@ -910,11 +935,9 @@
             </div>
           </div>
         </div>
-      </section>
 
-      <!-- Section: Campanas UTM -->
-      <section class="content-section" id="section-utms" style="display: none;">
-        <div class="card table-card full-width">
+        <!-- Campanas UTM unificadas en esta seccion -->
+        <div class="card table-card full-width" style="margin-top: 24px;">
           <div class="card-header">
             <h3>Campanas UTM</h3>
             <div class="card-filters">
@@ -1478,58 +1501,6 @@
     </footer>
   </div>
 
-  <!-- Modal: Agregar Anotacion -->
-  <div class="modal-overlay" id="modal-annotation" style="display:none;">
-    <div class="modal">
-      <div class="modal-header">
-        <h3>Agregar Anotacion</h3>
-        <button class="modal-close" data-close-modal="modal-annotation">&times;</button>
-      </div>
-      <div class="modal-body">
-        <div class="form-group">
-          <label for="annotation-date">Fecha</label>
-          <input type="date" id="annotation-date" class="filter-input">
-        </div>
-        <div class="form-group">
-          <label for="annotation-text">Nota</label>
-          <textarea id="annotation-text" class="annotation-textarea" placeholder="Describe el evento..."></textarea>
-        </div>
-        <div class="form-group">
-          <label for="annotation-color">Color</label>
-          <select id="annotation-color" class="filter-select">
-            <option value="#0077B6">Azul Oceano</option>
-            <option value="#FC3A54">Rojo</option>
-            <option value="#FC6E50">Coral</option>
-            <option value="#03045E">Azul Marino</option>
-            <option value="#6c757d">Gris</option>
-          </select>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn-secondary" data-close-modal="modal-annotation">Cancelar</button>
-        <button class="btn-primary" id="btn-save-annotation">Guardar</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Modal: Lista de Anotaciones -->
-  <div class="modal-overlay" id="modal-annotations-list" style="display:none;">
-    <div class="modal modal-lg">
-      <div class="modal-header">
-        <h3>Anotaciones</h3>
-        <button class="modal-close" data-close-modal="modal-annotations-list">&times;</button>
-      </div>
-      <div class="modal-body">
-        <div class="annotations-list" id="annotations-list-container">
-          <p class="empty-state">No hay anotaciones</p>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn-secondary" data-close-modal="modal-annotations-list">Cerrar</button>
-        <button class="btn-primary" id="btn-new-annotation">Nueva anotacion</button>
-      </div>
-    </div>
-  </div>
 
   <!-- PDF Preview Modal -->
   <div class="modal-overlay" id="modal-pdf-preview" style="display:none;">

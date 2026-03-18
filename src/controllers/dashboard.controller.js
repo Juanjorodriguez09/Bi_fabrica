@@ -24,6 +24,7 @@ function parseAdvancedFilters(req) {
   if (req.query.device) filters.device = req.query.device;
   if (req.query.browser) filters.browser = req.query.browser;
   if (req.query.country) filters.country = req.query.country;
+  if (req.query.city) filters.city = req.query.city;
   if (req.query.source) filters.source = req.query.source;
   if (req.query.utmCampaign) filters.utmCampaign = req.query.utmCampaign;
 
@@ -67,7 +68,8 @@ async function getEventsByType(req, res, next) {
     }
 
     const { startDate, endDate } = parseDateRange(req);
-    const data = await dashboardService.getEventsByType(siteId, startDate, endDate);
+    const filters = parseAdvancedFilters(req);
+    const data = await dashboardService.getEventsByType(siteId, startDate, endDate, filters);
 
     res.json({ success: true, data });
   } catch (error) {
@@ -104,7 +106,8 @@ async function getTopClicks(req, res, next) {
 
     const { startDate, endDate } = parseDateRange(req);
     const limit = parseInt(req.query.limit) || 10;
-    const data = await dashboardService.getTopClicks(siteId, startDate, endDate, limit);
+    const filters = parseAdvancedFilters(req);
+    const data = await dashboardService.getTopClicks(siteId, startDate, endDate, limit, filters);
 
     res.json({ success: true, data });
   } catch (error) {
@@ -122,7 +125,8 @@ async function getTopReferrers(req, res, next) {
 
     const { startDate, endDate } = parseDateRange(req);
     const limit = parseInt(req.query.limit) || 10;
-    const data = await dashboardService.getTopReferrers(siteId, startDate, endDate, limit);
+    const filters = parseAdvancedFilters(req);
+    const data = await dashboardService.getTopReferrers(siteId, startDate, endDate, limit, filters);
 
     res.json({ success: true, data });
   } catch (error) {
@@ -140,7 +144,8 @@ async function getTopUtms(req, res, next) {
 
     const { startDate, endDate } = parseDateRange(req);
     const limit = parseInt(req.query.limit) || 10;
-    const data = await dashboardService.getTopUtms(siteId, startDate, endDate, limit);
+    const filters = parseAdvancedFilters(req);
+    const data = await dashboardService.getTopUtms(siteId, startDate, endDate, limit, filters);
 
     res.json({ success: true, data });
   } catch (error) {
@@ -157,7 +162,8 @@ async function getScrollDistribution(req, res, next) {
     }
 
     const { startDate, endDate } = parseDateRange(req);
-    const data = await dashboardService.getScrollDistribution(siteId, startDate, endDate);
+    const filters = parseAdvancedFilters(req);
+    const data = await dashboardService.getScrollDistribution(siteId, startDate, endDate, filters);
 
     res.json({ success: true, data });
   } catch (error) {
@@ -174,7 +180,8 @@ async function getDeviceDistribution(req, res, next) {
     }
 
     const { startDate, endDate } = parseDateRange(req);
-    const data = await dashboardService.getDeviceDistribution(siteId, startDate, endDate);
+    const filters = parseAdvancedFilters(req);
+    const data = await dashboardService.getDeviceDistribution(siteId, startDate, endDate, filters);
 
     res.json({ success: true, data });
   } catch (error) {
@@ -191,7 +198,8 @@ async function getBrowserDistribution(req, res, next) {
     }
 
     const { startDate, endDate } = parseDateRange(req);
-    const data = await dashboardService.getBrowserDistribution(siteId, startDate, endDate);
+    const filters = parseAdvancedFilters(req);
+    const data = await dashboardService.getBrowserDistribution(siteId, startDate, endDate, filters);
 
     res.json({ success: true, data });
   } catch (error) {
@@ -259,7 +267,8 @@ async function getTrafficSources(req, res, next) {
     }
 
     const { startDate, endDate } = parseDateRange(req);
-    const data = await dashboardService.getTrafficSources(siteId, startDate, endDate);
+    const filters = parseAdvancedFilters(req);
+    const data = await dashboardService.getTrafficSources(siteId, startDate, endDate, filters);
 
     res.json({ success: true, data });
   } catch (error) {
@@ -276,7 +285,8 @@ async function getLocationData(req, res, next) {
     }
 
     const { startDate, endDate } = parseDateRange(req);
-    const data = await dashboardService.getLocationData(siteId, startDate, endDate);
+    const filters = parseAdvancedFilters(req);
+    const data = await dashboardService.getLocationData(siteId, startDate, endDate, filters);
 
     res.json({ success: true, data });
   } catch (error) {
@@ -327,7 +337,8 @@ async function getHeatmap(req, res, next) {
     }
 
     const { startDate, endDate } = parseDateRange(req);
-    const data = await dashboardService.getHeatmapData(siteId, startDate, endDate);
+    const filters = parseAdvancedFilters(req);
+    const data = await dashboardService.getHeatmapData(siteId, startDate, endDate, filters);
 
     res.json({ success: true, data });
   } catch (error) {
@@ -397,7 +408,8 @@ async function getConversions(req, res, next) {
     }
 
     const { startDate, endDate } = parseDateRange(req);
-    const data = await dashboardService.getConversionsData(siteId, startDate, endDate);
+    const filters = parseAdvancedFilters(req);
+    const data = await dashboardService.getConversionsData(siteId, startDate, endDate, filters);
 
     res.json({ success: true, data });
   } catch (error) {
@@ -414,7 +426,8 @@ async function getConversionsTrend(req, res, next) {
     }
 
     const { startDate, endDate } = parseDateRange(req);
-    const data = await dashboardService.getConversionsTrend(siteId, startDate, endDate);
+    const filters = parseAdvancedFilters(req);
+    const data = await dashboardService.getConversionsTrend(siteId, startDate, endDate, filters);
 
     res.json({ success: true, data });
   } catch (error) {
@@ -431,7 +444,8 @@ async function getEcommerceFunnel(req, res, next) {
     }
 
     const { startDate, endDate } = parseDateRange(req);
-    const data = await dashboardService.getEcommerceFunnel(siteId, startDate, endDate);
+    const filters = parseAdvancedFilters(req);
+    const data = await dashboardService.getEcommerceFunnel(siteId, startDate, endDate, filters);
 
     res.json({ success: true, data });
   } catch (error) {
@@ -449,7 +463,8 @@ async function getTopProducts(req, res, next) {
 
     const { startDate, endDate } = parseDateRange(req);
     const limit = parseInt(req.query.limit) || 10;
-    const data = await dashboardService.getTopProducts(siteId, startDate, endDate, limit);
+    const filters = parseAdvancedFilters(req);
+    const data = await dashboardService.getTopProducts(siteId, startDate, endDate, limit, filters);
 
     res.json({ success: true, data });
   } catch (error) {
@@ -467,7 +482,8 @@ async function getSectionReport(req, res, next) {
 
     const { startDate, endDate } = parseDateRange(req);
     const limit = parseInt(req.query.limit) || 20;
-    const data = await dashboardService.getSectionReport(siteId, startDate, endDate, limit);
+    const filters = parseAdvancedFilters(req);
+    const data = await dashboardService.getSectionReport(siteId, startDate, endDate, limit, filters);
 
     res.json({ success: true, data });
   } catch (error) {

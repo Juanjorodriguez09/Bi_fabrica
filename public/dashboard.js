@@ -75,7 +75,6 @@
       source: null,
       utmCampaign: null
     },
-    annotations: [],
     alerts: [],
     alertsConfig: {
       bounceEnabled: false,
@@ -142,6 +141,7 @@
     filterDevice: document.getElementById('filter-device'),
     filterBrowser: document.getElementById('filter-browser'),
     filterCountry: document.getElementById('filter-country'),
+    filterCity: document.getElementById('filter-city'),
     filterSource: document.getElementById('filter-source'),
     filterUtmCampaign: document.getElementById('filter-utm-campaign'),
     // Chart filters
@@ -395,7 +395,16 @@
     }
   }
 
+  function updateStateFromUI() {
+    const dates = getDateRange(elements.dateRange?.value || '7days');
+    state.startDate = dates.startDate;
+    state.endDate = dates.endDate;
+    state.filters = getAdvancedFilters();
+    updateFiltersIndicator();
+  }
+
   function loadSectionData(section) {
+    if (section !== 'resumen') updateStateFromUI();
     switch (section) {
       case 'resumen':
         loadAllData();
@@ -407,7 +416,7 @@
         loadSources();
         break;
       case 'utms':
-        loadUtmsDetail();
+        loadSources();
         break;
       case 'pages':
         loadPagesDetail();
@@ -760,6 +769,22 @@
       console.log('Error loading country options:', e);
     }
 
+    // Cargar opciones de ciudades
+    try {
+      const locationData = await fetchAPI('/location', {
+        siteId: state.siteId,
+        startDate: dates.startDate,
+        endDate: dates.endDate
+      });
+
+      if (elements.filterCity && locationData.cities && locationData.cities.length > 0) {
+        elements.filterCity.innerHTML = '<option value="">Todas</option>' +
+          locationData.cities.map(c => `<option value="${c.city}">${c.city}${c.countryCode ? ' (' + c.countryCode + ')' : ''}</option>`).join('');
+      }
+    } catch (e) {
+      console.log('Error loading city options:', e);
+    }
+
     // Cargar opciones de campanas UTM
     try {
       const utms = await fetchAPI('/utms', {
@@ -796,6 +821,19 @@
       document.getElementById('metric-bounce').textContent = data.bounceRate + '%';
       document.getElementById('metric-duration').textContent = formatDuration(data.avgSessionDuration);
       document.getElementById('metric-pages-session').textContent = data.avgPagesPerSession;
+
+      // Tabla nuevos vs recurrentes
+      const total = data.uniqueVisitors || 1;
+      const newPct = total > 0 ? Math.round((data.newVisitors / total) * 100) : 0;
+      const retPct = total > 0 ? Math.round((data.returningVisitors / total) * 100) : 0;
+      const newEl = document.getElementById('metric-new-visitors');
+      const retEl = document.getElementById('metric-returning-visitors');
+      const newPctEl = document.getElementById('metric-new-visitors-pct');
+      const retPctEl = document.getElementById('metric-returning-visitors-pct');
+      if (newEl) newEl.textContent = formatNumber(data.newVisitors);
+      if (retEl) retEl.textContent = formatNumber(data.returningVisitors);
+      if (newPctEl) newPctEl.textContent = newPct + '%';
+      if (retPctEl) retPctEl.textContent = retPct + '%';
     } catch (error) {
       console.error('Error loading summary:', error);
     }
@@ -828,7 +866,8 @@
       const data = await fetchAPI('/events', {
         siteId: state.siteId,
         startDate: state.startDate,
-        endDate: state.endDate
+        endDate: state.endDate,
+        ...state.filters
       });
 
       chartData.events = data;
@@ -875,7 +914,8 @@
         siteId: state.siteId,
         startDate: state.startDate,
         endDate: state.endDate,
-        limit: limit || elements.filterClicksLimit?.value || 10
+        limit: limit || elements.filterClicksLimit?.value || 10,
+        ...state.filters
       });
 
       exportData.clicks = data;
@@ -900,7 +940,8 @@
         siteId: state.siteId,
         startDate: state.startDate,
         endDate: state.endDate,
-        limit: limit || elements.filterReferrersLimit?.value || 10
+        limit: limit || elements.filterReferrersLimit?.value || 10,
+        ...state.filters
       });
 
       exportData.referrers = data;
@@ -922,7 +963,8 @@
         siteId: state.siteId,
         startDate: state.startDate,
         endDate: state.endDate,
-        limit: limit || elements.filterUtmsLimit?.value || 5
+        limit: limit || elements.filterUtmsLimit?.value || 5,
+        ...state.filters
       });
 
       exportData.utms = data;
@@ -946,7 +988,8 @@
       const data = await fetchAPI('/devices', {
         siteId: state.siteId,
         startDate: state.startDate,
-        endDate: state.endDate
+        endDate: state.endDate,
+        ...state.filters
       });
 
       chartData.devices = data.map(d => ({
@@ -967,7 +1010,8 @@
       const data = await fetchAPI('/browsers', {
         siteId: state.siteId,
         startDate: state.startDate,
-        endDate: state.endDate
+        endDate: state.endDate,
+        ...state.filters
       });
 
       chartData.browsers = data.map(b => ({
@@ -988,7 +1032,8 @@
       const data = await fetchAPI('/scroll', {
         siteId: state.siteId,
         startDate: state.startDate,
-        endDate: state.endDate
+        endDate: state.endDate,
+        ...state.filters
       });
 
       chartData.scroll = data;
@@ -1006,7 +1051,8 @@
       const data = await fetchAPI('/heatmap', {
         siteId: state.siteId,
         startDate: state.startDate,
-        endDate: state.endDate
+        endDate: state.endDate,
+        ...state.filters
       });
 
       chartData.heatmap = data;
@@ -1096,7 +1142,8 @@
       const data = await fetchAPI('/sources', {
         siteId: state.siteId,
         startDate: state.startDate,
-        endDate: state.endDate
+        endDate: state.endDate,
+        ...state.filters
       });
 
       chartData.sources = data;
@@ -1114,6 +1161,9 @@
       console.error('Error loading sources:', error);
     }
     showLoading('sources', false);
+
+    // Cargar UTMs en la misma seccion
+    await loadUtmsDetail();
   }
 
   async function loadUtmsDetail() {
@@ -1124,7 +1174,8 @@
         siteId: state.siteId,
         startDate: state.startDate,
         endDate: state.endDate,
-        limit
+        limit,
+        ...state.filters
       });
 
       renderTable('table-utms-detail', data, row => `
@@ -1169,7 +1220,8 @@
       const data = await fetchAPI('/events', {
         siteId: state.siteId,
         startDate: state.startDate,
-        endDate: state.endDate
+        endDate: state.endDate,
+        ...state.filters
       });
 
       const total = data.reduce((sum, e) => sum + e.count, 0);
@@ -1198,7 +1250,8 @@
         siteId: state.siteId,
         startDate: state.startDate,
         endDate: state.endDate,
-        limit
+        limit,
+        ...state.filters
       });
 
       renderTable('table-clicks-detail', data, row => `
@@ -1224,12 +1277,14 @@
         fetchAPI('/conversions', {
           siteId: state.siteId,
           startDate: state.startDate,
-          endDate: state.endDate
+          endDate: state.endDate,
+          ...state.filters
         }),
         fetchAPI('/conversions/trend', {
           siteId: state.siteId,
           startDate: state.startDate,
-          endDate: state.endDate
+          endDate: state.endDate,
+          ...state.filters
         })
       ]);
 
@@ -1337,12 +1392,14 @@
         fetchAPI('/ecommerce/funnel', {
           siteId: state.siteId,
           startDate: state.startDate,
-          endDate: state.endDate
+          endDate: state.endDate,
+          ...state.filters
         }),
         fetchAPI('/ecommerce/products', {
           siteId: state.siteId,
           startDate: state.startDate,
-          endDate: state.endDate
+          endDate: state.endDate,
+          ...state.filters
         })
       ]);
 
@@ -1420,7 +1477,8 @@
       const data = await fetchAPI('/location', {
         siteId: state.siteId,
         startDate: state.startDate,
-        endDate: state.endDate
+        endDate: state.endDate,
+        ...state.filters
       });
 
       // Countries table
@@ -1456,7 +1514,8 @@
       const data = await fetchAPI('/sections', {
         siteId: state.siteId,
         startDate: state.startDate,
-        endDate: state.endDate
+        endDate: state.endDate,
+        ...state.filters
       });
 
       renderTable('table-sections-report', data, row => `
@@ -1477,7 +1536,8 @@
       const data = await fetchAPI('/devices', {
         siteId: state.siteId,
         startDate: state.startDate,
-        endDate: state.endDate
+        endDate: state.endDate,
+        ...state.filters
       });
 
       const total = data.reduce((sum, d) => sum + d.sessions, 0);
@@ -1504,7 +1564,8 @@
       const data = await fetchAPI('/browsers', {
         siteId: state.siteId,
         startDate: state.startDate,
-        endDate: state.endDate
+        endDate: state.endDate,
+        ...state.filters
       });
 
       const total = data.reduce((sum, b) => sum + b.sessions, 0);
@@ -1686,12 +1747,14 @@
     const device = elements.filterDevice?.value;
     const browser = elements.filterBrowser?.value;
     const country = elements.filterCountry?.value;
+    const city = elements.filterCity?.value;
     const source = elements.filterSource?.value;
     const utmCampaign = elements.filterUtmCampaign?.value;
 
     if (device) filters.device = device;
     if (browser) filters.browser = browser;
     if (country) filters.country = country;
+    if (city) filters.city = city;
     if (source) filters.source = source;
     if (utmCampaign) filters.utmCampaign = utmCampaign;
 
@@ -1713,6 +1776,24 @@
       }
     } catch (e) {
       console.log('Error loading country filter:', e);
+    }
+  }
+
+  // Populate city filter from API
+  async function loadCityFilter() {
+    try {
+      const data = await fetchAPI('/location', {
+        siteId: state.siteId,
+        startDate: state.startDate,
+        endDate: state.endDate
+      });
+
+      if (elements.filterCity && data.cities && data.cities.length > 0) {
+        elements.filterCity.innerHTML = '<option value="">Todas</option>' +
+          data.cities.map(c => `<option value="${c.city}">${c.city}${c.countryCode ? ' (' + c.countryCode + ')' : ''}</option>`).join('');
+      }
+    } catch (e) {
+      console.log('Error loading city filter:', e);
     }
   }
 
@@ -1936,30 +2017,6 @@
       });
     }
 
-    // Prepare annotation lines for Chart.js
-    const annotationLines = {};
-    state.annotations.forEach((ann, idx) => {
-      const dateIdx = data.findIndex(d => d.date === ann.date);
-      if (dateIdx !== -1) {
-        annotationLines[`line${idx}`] = {
-          type: 'line',
-          xMin: dateIdx,
-          xMax: dateIdx,
-          borderColor: ann.color,
-          borderWidth: 2,
-          borderDash: [4, 4],
-          label: {
-            display: true,
-            content: ann.text.substring(0, 20),
-            position: 'start',
-            backgroundColor: ann.color,
-            color: '#fff',
-            font: { size: 10 }
-          }
-        };
-      }
-    });
-
     state.charts.trend = new Chart(ctx, {
       type: isBar ? 'bar' : 'line',
       data: { labels, datasets },
@@ -2005,16 +2062,6 @@
               label: function(context) {
                 return ' ' + context.dataset.label + ': ' + formatNumber(context.raw);
               },
-              afterBody: function(context) {
-                // Show annotation if exists for this date
-                const idx = context[0].dataIndex;
-                const date = data[idx]?.date;
-                const ann = state.annotations.find(a => a.date === date);
-                if (ann) {
-                  return ['\n📝 ' + ann.text];
-                }
-                return [];
-              }
             }
           },
           datalabels: {} // Config per dataset
@@ -2317,6 +2364,33 @@
     }
 
     tbody.innerHTML = data.map(row => `<tr>${rowRenderer(row)}</tr>`).join('');
+
+    // Activar orden por columnas
+    const headers = table.querySelectorAll('thead th');
+    headers.forEach((th, colIndex) => {
+      th.style.cursor = 'pointer';
+      th.title = 'Clic para ordenar';
+      th.onclick = () => {
+        const dir = th.dataset.sortDir === 'asc' ? 'desc' : 'asc';
+        headers.forEach(h => { h.dataset.sortDir = ''; const ic = h.querySelector('.sort-ic'); if (ic) ic.remove(); });
+        th.dataset.sortDir = dir;
+        const ic = document.createElement('span');
+        ic.className = 'sort-ic';
+        ic.textContent = dir === 'asc' ? ' ▲' : ' ▼';
+        ic.style.cssText = 'font-size:10px;margin-left:4px;opacity:0.7';
+        th.appendChild(ic);
+        const rows = Array.from(tbody.querySelectorAll('tr'));
+        rows.sort((a, b) => {
+          const aVal = a.cells[colIndex]?.textContent.trim() || '';
+          const bVal = b.cells[colIndex]?.textContent.trim() || '';
+          const aNum = parseFloat(aVal.replace(/[^0-9.-]/g, ''));
+          const bNum = parseFloat(bVal.replace(/[^0-9.-]/g, ''));
+          if (!isNaN(aNum) && !isNaN(bNum)) return dir === 'asc' ? aNum - bNum : bNum - aNum;
+          return dir === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+        });
+        rows.forEach(row => tbody.appendChild(row));
+      };
+    });
   }
 
   // ============================================
@@ -2397,6 +2471,7 @@
     elements.filterDevice?.addEventListener('change', () => loadSectionData(state.currentSection));
     elements.filterBrowser?.addEventListener('change', () => loadSectionData(state.currentSection));
     elements.filterCountry?.addEventListener('change', () => loadSectionData(state.currentSection));
+    elements.filterCity?.addEventListener('change', () => loadSectionData(state.currentSection));
     elements.filterSource?.addEventListener('change', () => loadSectionData(state.currentSection));
     elements.filterUtmCampaign?.addEventListener('change', () => loadSectionData(state.currentSection));
 
@@ -2570,16 +2645,11 @@
     if (elements.filterDevice) elements.filterDevice.value = '';
     if (elements.filterBrowser) elements.filterBrowser.value = '';
     if (elements.filterCountry) elements.filterCountry.value = '';
+    if (elements.filterCity) elements.filterCity.value = '';
     if (elements.filterSource) elements.filterSource.value = '';
     if (elements.filterUtmCampaign) elements.filterUtmCampaign.value = '';
 
-    state.filters = {
-      device: null,
-      browser: null,
-      country: null,
-      source: null,
-      utmCampaign: null
-    };
+    state.filters = {};
 
     updateFiltersIndicator();
     loadSectionData(state.currentSection);
@@ -2998,100 +3068,6 @@
   // ============================================
   // Annotations System
   // ============================================
-  function initAnnotations() {
-    loadAnnotations();
-
-    document.getElementById('btn-add-annotation')?.addEventListener('click', () => {
-      document.getElementById('annotation-date').value = new Date().toISOString().split('T')[0];
-      document.getElementById('annotation-text').value = '';
-      document.getElementById('modal-annotation').style.display = 'flex';
-    });
-
-    document.getElementById('btn-annotations')?.addEventListener('click', () => {
-      renderAnnotationsList();
-      document.getElementById('modal-annotations-list').style.display = 'flex';
-    });
-
-    document.getElementById('btn-save-annotation')?.addEventListener('click', saveAnnotation);
-    document.getElementById('btn-new-annotation')?.addEventListener('click', () => {
-      document.getElementById('modal-annotations-list').style.display = 'none';
-      document.getElementById('annotation-date').value = new Date().toISOString().split('T')[0];
-      document.getElementById('annotation-text').value = '';
-      document.getElementById('modal-annotation').style.display = 'flex';
-    });
-
-    // Close modals
-    document.querySelectorAll('[data-close-modal]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const modalId = btn.dataset.closeModal;
-        document.getElementById(modalId).style.display = 'none';
-      });
-    });
-  }
-
-  function loadAnnotations() {
-    try {
-      const saved = localStorage.getItem('micomercio_annotations');
-      state.annotations = saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      state.annotations = [];
-    }
-  }
-
-  function saveAnnotation() {
-    const date = document.getElementById('annotation-date').value;
-    const text = document.getElementById('annotation-text').value;
-    const color = document.getElementById('annotation-color').value;
-
-    if (!date || !text) {
-      alert('Por favor completa todos los campos');
-      return;
-    }
-
-    state.annotations.push({ id: Date.now(), date, text, color });
-    localStorage.setItem('micomercio_annotations', JSON.stringify(state.annotations));
-    document.getElementById('modal-annotation').style.display = 'none';
-
-    // Refresh chart
-    if (state.trendData) {
-      const metric = elements.filterTrendMetric?.value || 'all';
-      const chartType = elements.filterTrendType?.value || 'line';
-      renderTrendChart(state.trendData, metric, chartType);
-    }
-  }
-
-  function renderAnnotationsList() {
-    const container = document.getElementById('annotations-list-container');
-    if (!container) return;
-
-    if (state.annotations.length === 0) {
-      container.innerHTML = '<p class="empty-state">No hay anotaciones</p>';
-      return;
-    }
-
-    container.innerHTML = state.annotations.map(a => `
-      <div class="annotation-item" style="border-left-color: ${a.color}">
-        <div class="annotation-item-content">
-          <div class="annotation-item-date">${a.date}</div>
-          <div class="annotation-item-text">${a.text}</div>
-        </div>
-        <button class="annotation-item-delete" data-id="${a.id}">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-          </svg>
-        </button>
-      </div>
-    `).join('');
-
-    container.querySelectorAll('.annotation-item-delete').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const id = parseInt(btn.dataset.id);
-        state.annotations = state.annotations.filter(a => a.id !== id);
-        localStorage.setItem('micomercio_annotations', JSON.stringify(state.annotations));
-        renderAnnotationsList();
-      });
-    });
-  }
 
   // ============================================
   // Alerts System
@@ -3259,7 +3235,6 @@
     initToggleTables();
     initCollapsibleCards();
     initExportDropdown();
-    initAnnotations();
     initAlerts();
     initGoals();
     setupEventListeners();

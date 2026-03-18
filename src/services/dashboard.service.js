@@ -29,10 +29,21 @@ async function getSummary(siteId, startDate, endDate, filters = {}) {
     sessionWhere.visitor = { device_type: filters.device };
   }
 
-  // Filtro por país (requiere join con geo_cache)
-  let countryFilter = null;
-  if (filters.country) {
-    countryFilter = filters.country;
+  // Filtro por país o ciudad (requiere join con geo_cache)
+  if (filters.country || filters.city) {
+    const geoWhere = {};
+    if (filters.country) geoWhere.country_code = filters.country;
+    if (filters.city) geoWhere.city = filters.city;
+    const geoEntries = await prisma.geo_cache.findMany({
+      where: geoWhere,
+      select: { ip_address: true }
+    });
+    const filteredIPs = geoEntries.map(g => g.ip_address);
+    if (filteredIPs.length > 0) {
+      sessionWhere.ip_address = { in: filteredIPs };
+    } else {
+      return { pageviews: 0, sessions: 0, uniqueVisitors: 0, newVisitors: 0, returningVisitors: 0, bounceRate: 0, avgSessionDuration: 0, avgPagesPerSession: 0 };
+    }
   }
 
   // Obtener IDs de sesiones filtradas
@@ -130,12 +141,54 @@ async function getSummary(siteId, startDate, endDate, filters = {}) {
 }
 
 // ============================================
+// Helper: obtener IDs de sesiones filtradas
+// ============================================
+
+async function getFilteredSessionIds(siteId, startDate, endDate, filters = {}) {
+  const start = new Date(startDate + 'T00:00:00.000Z');
+  const end = new Date(endDate + 'T23:59:59.999Z');
+
+  const sessionWhere = {
+    site_id: siteId,
+    started_at: { gte: start, lte: end }
+  };
+
+  if (filters.browser) sessionWhere.browser = filters.browser;
+  if (filters.source) sessionWhere.utm_source = filters.source;
+  if (filters.utmCampaign) sessionWhere.utm_campaign = filters.utmCampaign;
+  if (filters.device) sessionWhere.visitor = { device_type: filters.device };
+
+  if (filters.country || filters.city) {
+    const geoWhere = {};
+    if (filters.country) geoWhere.country_code = filters.country;
+    if (filters.city) geoWhere.city = filters.city;
+    const geoEntries = await prisma.geo_cache.findMany({
+      where: geoWhere,
+      select: { ip_address: true }
+    });
+    const ips = geoEntries.map(g => g.ip_address);
+    if (ips.length === 0) return [];
+    sessionWhere.ip_address = { in: ips };
+  }
+
+  const sessions = await prisma.session.findMany({
+    where: sessionWhere,
+    select: { id: true }
+  });
+
+  return sessions.map(s => Number(s.id));
+}
+
+// ============================================
 // Eventos por tipo
 // ============================================
 
-async function getEventsByType(siteId, startDate, endDate) {
+async function getEventsByType(siteId, startDate, endDate, filters = {}) {
   const start = new Date(startDate + 'T00:00:00.000Z');
   const end = new Date(endDate + 'T23:59:59.999Z');
+
+  const sessionIds = await getFilteredSessionIds(siteId, startDate, endDate, filters);
+  if (sessionIds.length === 0) return [];
 
   const events = await prisma.$queryRaw`
     SELECT
@@ -145,6 +198,7 @@ async function getEventsByType(siteId, startDate, endDate) {
     WHERE site_id = ${siteId}
       AND occurred_at >= ${start}
       AND occurred_at <= ${end}
+      AND session_id = ANY(${sessionIds}::bigint[])
     GROUP BY event_type
     ORDER BY count DESC
   `;
@@ -163,31 +217,13 @@ async function getTopPages(siteId, startDate, endDate, limit = 10, filters = {})
   const start = new Date(startDate + 'T00:00:00.000Z');
   const end = new Date(endDate + 'T23:59:59.999Z');
 
-  // Aplicar filtros avanzados
-  let sessionIds = null;
-  if (filters.browser || filters.source || filters.utmCampaign || filters.device) {
-    const sessionWhere = {
-      site_id: siteId,
-      started_at: { gte: start, lte: end }
-    };
-    if (filters.browser) sessionWhere.browser = filters.browser;
-    if (filters.source) sessionWhere.utm_source = filters.source;
-    if (filters.utmCampaign) sessionWhere.utm_campaign = filters.utmCampaign;
-    if (filters.device) {
-      sessionWhere.visitor = { device_type: filters.device };
-    }
-
-    const sessions = await prisma.session.findMany({
-      where: sessionWhere,
-      select: { id: true }
-    });
-    sessionIds = sessions.map(s => Number(s.id));
-
-    if (sessionIds.length === 0) return [];
-  }
+  const hasFilters = filters.browser || filters.source || filters.utmCampaign || filters.device || filters.country || filters.city;
 
   let pages;
-  if (sessionIds) {
+  if (hasFilters) {
+    const sessionIds = await getFilteredSessionIds(siteId, startDate, endDate, filters);
+    if (sessionIds.length === 0) return [];
+
     pages = await prisma.$queryRaw`
       SELECT
         page_path as path,
@@ -236,9 +272,12 @@ async function getTopPages(siteId, startDate, endDate, limit = 10, filters = {})
 // Top elementos clickeados
 // ============================================
 
-async function getTopClicks(siteId, startDate, endDate, limit = 10) {
+async function getTopClicks(siteId, startDate, endDate, limit = 10, filters = {}) {
   const start = new Date(startDate + 'T00:00:00.000Z');
   const end = new Date(endDate + 'T23:59:59.999Z');
+
+  const sessionIds = await getFilteredSessionIds(siteId, startDate, endDate, filters);
+  if (sessionIds.length === 0) return [];
 
   const clicks = await prisma.$queryRaw`
     SELECT
@@ -251,6 +290,7 @@ async function getTopClicks(siteId, startDate, endDate, limit = 10) {
       AND event_type = 'click'
       AND occurred_at >= ${start}
       AND occurred_at <= ${end}
+      AND session_id = ANY(${sessionIds}::bigint[])
     GROUP BY element_id, element_text, element_tag
     ORDER BY clicks DESC
     LIMIT ${limit}
@@ -268,18 +308,16 @@ async function getTopClicks(siteId, startDate, endDate, limit = 10) {
 // Top referrers
 // ============================================
 
-async function getTopReferrers(siteId, startDate, endDate, limit = 10) {
-  const start = new Date(startDate + 'T00:00:00.000Z');
-  const end = new Date(endDate + 'T23:59:59.999Z');
+async function getTopReferrers(siteId, startDate, endDate, limit = 10, filters = {}) {
+  const sessionIds = await getFilteredSessionIds(siteId, startDate, endDate, filters);
+  if (sessionIds.length === 0) return [];
 
   const referrers = await prisma.$queryRaw`
     SELECT
       referrer,
       COUNT(*) as sessions
     FROM session
-    WHERE site_id = ${siteId}
-      AND started_at >= ${start}
-      AND started_at <= ${end}
+    WHERE id = ANY(${sessionIds}::bigint[])
       AND referrer IS NOT NULL
       AND referrer != ''
     GROUP BY referrer
@@ -297,9 +335,9 @@ async function getTopReferrers(siteId, startDate, endDate, limit = 10) {
 // Top UTMs
 // ============================================
 
-async function getTopUtms(siteId, startDate, endDate, limit = 10) {
-  const start = new Date(startDate + 'T00:00:00.000Z');
-  const end = new Date(endDate + 'T23:59:59.999Z');
+async function getTopUtms(siteId, startDate, endDate, limit = 10, filters = {}) {
+  const sessionIds = await getFilteredSessionIds(siteId, startDate, endDate, filters);
+  if (sessionIds.length === 0) return [];
 
   const utms = await prisma.$queryRaw`
     SELECT
@@ -308,9 +346,7 @@ async function getTopUtms(siteId, startDate, endDate, limit = 10) {
       utm_campaign as campaign,
       COUNT(*) as sessions
     FROM session
-    WHERE site_id = ${siteId}
-      AND started_at >= ${start}
-      AND started_at <= ${end}
+    WHERE id = ANY(${sessionIds}::bigint[])
       AND utm_source IS NOT NULL
     GROUP BY utm_source, utm_medium, utm_campaign
     ORDER BY sessions DESC
@@ -329,9 +365,12 @@ async function getTopUtms(siteId, startDate, endDate, limit = 10) {
 // Distribucion de scroll
 // ============================================
 
-async function getScrollDistribution(siteId, startDate, endDate) {
+async function getScrollDistribution(siteId, startDate, endDate, filters = {}) {
   const start = new Date(startDate + 'T00:00:00.000Z');
   const end = new Date(endDate + 'T23:59:59.999Z');
+
+  const sessionIds = await getFilteredSessionIds(siteId, startDate, endDate, filters);
+  if (sessionIds.length === 0) return [];
 
   const scrolls = await prisma.$queryRaw`
     SELECT
@@ -342,6 +381,7 @@ async function getScrollDistribution(siteId, startDate, endDate) {
       AND event_type = 'scroll'
       AND occurred_at >= ${start}
       AND occurred_at <= ${end}
+      AND session_id = ANY(${sessionIds}::bigint[])
     GROUP BY depth
     ORDER BY depth
   `;
@@ -356,9 +396,9 @@ async function getScrollDistribution(siteId, startDate, endDate) {
 // Distribucion por dispositivo
 // ============================================
 
-async function getDeviceDistribution(siteId, startDate, endDate) {
-  const start = new Date(startDate + 'T00:00:00.000Z');
-  const end = new Date(endDate + 'T23:59:59.999Z');
+async function getDeviceDistribution(siteId, startDate, endDate, filters = {}) {
+  const sessionIds = await getFilteredSessionIds(siteId, startDate, endDate, filters);
+  if (sessionIds.length === 0) return [];
 
   const devices = await prisma.$queryRaw`
     SELECT
@@ -366,9 +406,7 @@ async function getDeviceDistribution(siteId, startDate, endDate) {
       COUNT(DISTINCT s.id) as sessions
     FROM session s
     INNER JOIN visitor v ON v.id = s.visitor_id
-    WHERE s.site_id = ${siteId}
-      AND s.started_at >= ${start}
-      AND s.started_at <= ${end}
+    WHERE s.id = ANY(${sessionIds}::bigint[])
     GROUP BY v.device_type
     ORDER BY sessions DESC
   `;
@@ -383,18 +421,16 @@ async function getDeviceDistribution(siteId, startDate, endDate) {
 // Distribucion por navegador
 // ============================================
 
-async function getBrowserDistribution(siteId, startDate, endDate) {
-  const start = new Date(startDate + 'T00:00:00.000Z');
-  const end = new Date(endDate + 'T23:59:59.999Z');
+async function getBrowserDistribution(siteId, startDate, endDate, filters = {}) {
+  const sessionIds = await getFilteredSessionIds(siteId, startDate, endDate, filters);
+  if (sessionIds.length === 0) return [];
 
   const browsers = await prisma.$queryRaw`
     SELECT
       browser,
       COUNT(*) as sessions
     FROM session
-    WHERE site_id = ${siteId}
-      AND started_at >= ${start}
-      AND started_at <= ${end}
+    WHERE id = ANY(${sessionIds}::bigint[])
     GROUP BY browser
     ORDER BY sessions DESC
   `;
@@ -413,33 +449,13 @@ async function getDailyTrend(siteId, startDate, endDate, filters = {}) {
   const start = new Date(startDate + 'T00:00:00.000Z');
   const end = new Date(endDate + 'T23:59:59.999Z');
 
-  // Aplicar filtros avanzados obteniendo sesiones filtradas
-  let sessionIds = null;
-  if (filters.browser || filters.source || filters.utmCampaign || filters.device) {
-    const sessionWhere = {
-      site_id: siteId,
-      started_at: { gte: start, lte: end }
-    };
-    if (filters.browser) sessionWhere.browser = filters.browser;
-    if (filters.source) sessionWhere.utm_source = filters.source;
-    if (filters.utmCampaign) sessionWhere.utm_campaign = filters.utmCampaign;
-    if (filters.device) {
-      sessionWhere.visitor = { device_type: filters.device };
-    }
-
-    const sessions = await prisma.session.findMany({
-      where: sessionWhere,
-      select: { id: true }
-    });
-    sessionIds = sessions.map(s => Number(s.id));
-
-    if (sessionIds.length === 0) {
-      return [];
-    }
-  }
+  const hasFilters = filters.browser || filters.source || filters.utmCampaign || filters.device || filters.country || filters.city;
 
   let trend;
-  if (sessionIds) {
+  if (hasFilters) {
+    const sessionIds = await getFilteredSessionIds(siteId, startDate, endDate, filters);
+    if (sessionIds.length === 0) return [];
+
     trend = await prisma.$queryRaw`
       SELECT
         DATE(occurred_at) as date,
@@ -560,9 +576,9 @@ async function getSites() {
 // Fuentes de tráfico con clasificación Direct
 // ============================================
 
-async function getTrafficSources(siteId, startDate, endDate) {
-  const start = new Date(startDate + 'T00:00:00.000Z');
-  const end = new Date(endDate + 'T23:59:59.999Z');
+async function getTrafficSources(siteId, startDate, endDate, filters = {}) {
+  const sessionIds = await getFilteredSessionIds(siteId, startDate, endDate, filters);
+  if (sessionIds.length === 0) return [];
 
   const sources = await prisma.$queryRaw`
     SELECT
@@ -570,9 +586,7 @@ async function getTrafficSources(siteId, startDate, endDate) {
       COALESCE(traffic_medium, '(none)') as medium,
       COUNT(*) as sessions
     FROM session
-    WHERE site_id = ${siteId}
-      AND started_at >= ${start}
-      AND started_at <= ${end}
+    WHERE id = ANY(${sessionIds}::bigint[])
     GROUP BY traffic_source, traffic_medium
     ORDER BY sessions DESC
   `;
@@ -591,9 +605,9 @@ async function getTrafficSources(siteId, startDate, endDate) {
 // Ubicación geográfica (usando geo_cache)
 // ============================================
 
-async function getLocationData(siteId, startDate, endDate) {
-  const start = new Date(startDate + 'T00:00:00.000Z');
-  const end = new Date(endDate + 'T23:59:59.999Z');
+async function getLocationData(siteId, startDate, endDate, filters = {}) {
+  const sessionIds = await getFilteredSessionIds(siteId, startDate, endDate, filters);
+  if (sessionIds.length === 0) return { countries: [], cities: [] };
 
   // Obtener países (visitantes únicos)
   const countries = await prisma.$queryRaw`
@@ -603,9 +617,7 @@ async function getLocationData(siteId, startDate, endDate) {
       COUNT(DISTINCT s.visitor_id) as visitors
     FROM session s
     JOIN geo_cache gc ON gc.ip_address = s.ip_address
-    WHERE s.site_id = ${siteId}
-      AND s.started_at >= ${start}
-      AND s.started_at <= ${end}
+    WHERE s.id = ANY(${sessionIds}::bigint[])
       AND gc.country_code IS NOT NULL
     GROUP BY gc.country_code, gc.country_name
     ORDER BY visitors DESC
@@ -621,9 +633,7 @@ async function getLocationData(siteId, startDate, endDate) {
       COUNT(DISTINCT s.visitor_id) as visitors
     FROM session s
     JOIN geo_cache gc ON gc.ip_address = s.ip_address
-    WHERE s.site_id = ${siteId}
-      AND s.started_at >= ${start}
-      AND s.started_at <= ${end}
+    WHERE s.id = ANY(${sessionIds}::bigint[])
       AND gc.city IS NOT NULL
     GROUP BY gc.city, gc.region, gc.country_name, gc.country_code
     ORDER BY visitors DESC
@@ -785,24 +795,48 @@ async function getRealtimeDetailed(siteId, minutes = 30) {
 // Heatmap: Trafico por dia y hora
 // ============================================
 
-async function getHeatmapData(siteId, startDate, endDate) {
+async function getHeatmapData(siteId, startDate, endDate, filters = {}) {
   const start = new Date(startDate + 'T00:00:00.000Z');
   const end = new Date(endDate + 'T23:59:59.999Z');
 
-  // Obtener datos agrupados por dia de semana y hora
-  const data = await prisma.$queryRaw`
-    SELECT
-      EXTRACT(DOW FROM occurred_at) as day_of_week,
-      EXTRACT(HOUR FROM occurred_at) as hour,
-      COUNT(*) FILTER (WHERE event_type = 'pageview') as pageviews,
-      COUNT(DISTINCT visitor_id) as visitors
-    FROM event
-    WHERE site_id = ${siteId}
-      AND occurred_at >= ${start}
-      AND occurred_at <= ${end}
-    GROUP BY day_of_week, hour
-    ORDER BY day_of_week, hour
-  `;
+  const hasFilters = filters.browser || filters.source || filters.utmCampaign || filters.device || filters.country || filters.city;
+
+  let data;
+  if (hasFilters) {
+    const sessionIds = await getFilteredSessionIds(siteId, startDate, endDate, filters);
+    if (sessionIds.length === 0) {
+      data = [];
+    } else {
+      data = await prisma.$queryRaw`
+        SELECT
+          EXTRACT(DOW FROM occurred_at) as day_of_week,
+          EXTRACT(HOUR FROM occurred_at) as hour,
+          COUNT(*) FILTER (WHERE event_type = 'pageview') as pageviews,
+          COUNT(DISTINCT visitor_id) as visitors
+        FROM event
+        WHERE site_id = ${siteId}
+          AND occurred_at >= ${start}
+          AND occurred_at <= ${end}
+          AND session_id = ANY(${sessionIds}::bigint[])
+        GROUP BY day_of_week, hour
+        ORDER BY day_of_week, hour
+      `;
+    }
+  } else {
+    data = await prisma.$queryRaw`
+      SELECT
+        EXTRACT(DOW FROM occurred_at) as day_of_week,
+        EXTRACT(HOUR FROM occurred_at) as hour,
+        COUNT(*) FILTER (WHERE event_type = 'pageview') as pageviews,
+        COUNT(DISTINCT visitor_id) as visitors
+      FROM event
+      WHERE site_id = ${siteId}
+        AND occurred_at >= ${start}
+        AND occurred_at <= ${end}
+      GROUP BY day_of_week, hour
+      ORDER BY day_of_week, hour
+    `;
+  }
 
   // Crear matriz 7x24 (dias x horas)
   const heatmap = [];
@@ -976,9 +1010,22 @@ async function getFunnelData(siteId, startDate, endDate) {
 // Conversiones
 // ============================================
 
-async function getConversionsData(siteId, startDate, endDate) {
+async function getConversionsData(siteId, startDate, endDate, filters = {}) {
   const start = new Date(startDate + 'T00:00:00.000Z');
   const end = new Date(endDate + 'T23:59:59.999Z');
+
+  const sessionIds = await getFilteredSessionIds(siteId, startDate, endDate, filters);
+  if (sessionIds.length === 0) {
+    return {
+      formSubmits: 0,
+      formStarts: 0,
+      formRate: 0,
+      whatsappClicks: 0,
+      totalConversions: 0,
+      topPhones: [],
+      topForms: []
+    };
+  }
 
   const [formCounts, whatsappClicks, topPhones, topForms] = await Promise.all([
     // form_submit y form_start counts
@@ -991,6 +1038,7 @@ async function getConversionsData(siteId, startDate, endDate) {
         AND occurred_at >= ${start}
         AND occurred_at <= ${end}
         AND event_type IN ('form_submit', 'form_start')
+        AND session_id = ANY(${sessionIds}::bigint[])
       GROUP BY event_type
     `,
     // whatsapp_click count
@@ -1001,6 +1049,7 @@ async function getConversionsData(siteId, startDate, endDate) {
         AND occurred_at >= ${start}
         AND occurred_at <= ${end}
         AND event_type = 'whatsapp_click'
+        AND session_id = ANY(${sessionIds}::bigint[])
     `,
     // Top números contactados
     prisma.$queryRaw`
@@ -1013,6 +1062,7 @@ async function getConversionsData(siteId, startDate, endDate) {
         AND occurred_at <= ${end}
         AND event_type = 'whatsapp_click'
         AND meta_data->>'phoneNumber' IS NOT NULL
+        AND session_id = ANY(${sessionIds}::bigint[])
       GROUP BY phone_number
       ORDER BY clicks DESC
       LIMIT 10
@@ -1029,6 +1079,7 @@ async function getConversionsData(siteId, startDate, endDate) {
         AND occurred_at <= ${end}
         AND event_type IN ('form_submit', 'form_start')
         AND meta_data->>'formId' IS NOT NULL
+        AND session_id = ANY(${sessionIds}::bigint[])
       GROUP BY form_id
       ORDER BY submits DESC
       LIMIT 10
@@ -1060,9 +1111,12 @@ async function getConversionsData(siteId, startDate, endDate) {
   };
 }
 
-async function getConversionsTrend(siteId, startDate, endDate) {
+async function getConversionsTrend(siteId, startDate, endDate, filters = {}) {
   const start = new Date(startDate + 'T00:00:00.000Z');
   const end = new Date(endDate + 'T23:59:59.999Z');
+
+  const sessionIds = await getFilteredSessionIds(siteId, startDate, endDate, filters);
+  if (sessionIds.length === 0) return [];
 
   const trend = await prisma.$queryRaw`
     SELECT
@@ -1074,6 +1128,7 @@ async function getConversionsTrend(siteId, startDate, endDate) {
       AND occurred_at >= ${start}
       AND occurred_at <= ${end}
       AND event_type IN ('form_submit', 'whatsapp_click')
+      AND session_id = ANY(${sessionIds}::bigint[])
     GROUP BY DATE(occurred_at)
     ORDER BY date
   `;
@@ -1090,9 +1145,14 @@ async function getConversionsTrend(siteId, startDate, endDate) {
 // E-commerce / Funnel
 // ============================================
 
-async function getEcommerceFunnel(siteId, startDate, endDate) {
+async function getEcommerceFunnel(siteId, startDate, endDate, filters = {}) {
   const start = new Date(startDate + 'T00:00:00.000Z');
   const end = new Date(endDate + 'T23:59:59.999Z');
+
+  const sessionIds = await getFilteredSessionIds(siteId, startDate, endDate, filters);
+  if (sessionIds.length === 0) {
+    return { viewProduct: 0, addToCart: 0, beginCheckout: 0, purchase: 0, revenue: 0, avgTicket: 0 };
+  }
 
   const [funnelCounts, revenueTotals] = await Promise.all([
     prisma.$queryRaw`
@@ -1104,6 +1164,7 @@ async function getEcommerceFunnel(siteId, startDate, endDate) {
         AND occurred_at >= ${start}
         AND occurred_at <= ${end}
         AND event_type IN ('view_product', 'add_to_cart', 'begin_checkout', 'purchase')
+        AND session_id = ANY(${sessionIds}::bigint[])
       GROUP BY event_type
     `,
     prisma.$queryRaw`
@@ -1117,6 +1178,7 @@ async function getEcommerceFunnel(siteId, startDate, endDate) {
         AND occurred_at <= ${end}
         AND event_type = 'purchase'
         AND meta_data->>'total' IS NOT NULL
+        AND session_id = ANY(${sessionIds}::bigint[])
     `
   ]);
 
@@ -1135,9 +1197,12 @@ async function getEcommerceFunnel(siteId, startDate, endDate) {
   };
 }
 
-async function getTopProducts(siteId, startDate, endDate, limit = 10) {
+async function getTopProducts(siteId, startDate, endDate, limit = 10, filters = {}) {
   const start = new Date(startDate + 'T00:00:00.000Z');
   const end = new Date(endDate + 'T23:59:59.999Z');
+
+  const sessionIds = await getFilteredSessionIds(siteId, startDate, endDate, filters);
+  if (sessionIds.length === 0) return { mostViewed: [], mostAdded: [] };
 
   const [mostViewed, mostAdded] = await Promise.all([
     prisma.$queryRaw`
@@ -1151,6 +1216,7 @@ async function getTopProducts(siteId, startDate, endDate, limit = 10) {
         AND occurred_at <= ${end}
         AND event_type = 'view_product'
         AND meta_data->>'productId' IS NOT NULL
+        AND session_id = ANY(${sessionIds}::bigint[])
       GROUP BY product_id, product_name
       ORDER BY views DESC
       LIMIT ${limit}
@@ -1166,6 +1232,7 @@ async function getTopProducts(siteId, startDate, endDate, limit = 10) {
         AND occurred_at <= ${end}
         AND event_type = 'add_to_cart'
         AND meta_data->>'productId' IS NOT NULL
+        AND session_id = ANY(${sessionIds}::bigint[])
       GROUP BY product_id, product_name
       ORDER BY adds DESC
       LIMIT ${limit}
@@ -1190,9 +1257,12 @@ async function getTopProducts(siteId, startDate, endDate, limit = 10) {
 // Visitas por seccion de la web (page_path report)
 // ============================================
 
-async function getSectionReport(siteId, startDate, endDate, limit = 20) {
+async function getSectionReport(siteId, startDate, endDate, limit = 20, filters = {}) {
   const start = new Date(startDate + 'T00:00:00.000Z');
   const end = new Date(endDate + 'T23:59:59.999Z');
+
+  const sessionIds = await getFilteredSessionIds(siteId, startDate, endDate, filters);
+  if (sessionIds.length === 0) return [];
 
   const sections = await prisma.$queryRaw`
     SELECT
@@ -1205,6 +1275,7 @@ async function getSectionReport(siteId, startDate, endDate, limit = 20) {
       AND occurred_at >= ${start}
       AND occurred_at <= ${end}
       AND page_path IS NOT NULL
+      AND session_id = ANY(${sessionIds}::bigint[])
     GROUP BY page_path
     ORDER BY views DESC
     LIMIT ${limit}
