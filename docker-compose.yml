@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: postgres:17
+    container_name: micomercio_bi_dashboard_local_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: micomercio
+      POSTGRES_PASSWORD: micomercio_local_dev
+      POSTGRES_DB: micomercio_local
+    ports:
+      # 5433 en el host para no chocar con el Postgres nativo del sistema en 5432
+      - "5433:5432"
+    volumes:
+      - micomercio_bi_dashboard_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U micomercio -d micomercio_local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  micomercio_bi_dashboard_pgdata:
