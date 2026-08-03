@@ -208,6 +208,20 @@
     return text.substring(0, maxLength) + '...';
   }
 
+  // Escapa cualquier valor antes de insertarlo en innerHTML o en un atributo
+  // HTML. Necesario porque estos campos vienen de datos de tracking
+  // (UTM, texto/id de clicks, title/path, referrer, etc.) que pueden estar
+  // bajo control de un visitante del sitio del cliente.
+  function escapeHtml(value) {
+    if (value == null) return '';
+    return String(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   function getHostname(url) {
     try {
       return new URL(url).hostname;
@@ -654,7 +668,7 @@
       case 'trend':
         data = state.trendData || [];
         rowRenderer = row => `
-          <td>${row.date}</td>
+          <td>${escapeHtml(row.date)}</td>
           <td class="num">${formatNumber(row.pageviews)}</td>
           <td class="num">${formatNumber(row.sessions)}</td>
           <td class="num">${formatNumber(row.visitors)}</td>
@@ -664,7 +678,7 @@
       case 'events':
         data = chartData.events || [];
         rowRenderer = row => `
-          <td>${row.type}</td>
+          <td>${escapeHtml(row.type)}</td>
           <td class="num">${formatNumber(row.count)}</td>
         `;
         break;
@@ -672,7 +686,7 @@
       case 'devices':
         data = chartData.devices || [];
         rowRenderer = row => `
-          <td>${row.label}</td>
+          <td>${escapeHtml(row.label)}</td>
           <td class="num">${formatNumber(row.value)}</td>
         `;
         break;
@@ -680,7 +694,7 @@
       case 'browsers':
         data = chartData.browsers || [];
         rowRenderer = row => `
-          <td>${row.label}</td>
+          <td>${escapeHtml(row.label)}</td>
           <td class="num">${formatNumber(row.value)}</td>
         `;
         break;
@@ -697,8 +711,8 @@
         data = chartData.sources || [];
         const total = data.reduce((sum, s) => sum + s.sessions, 0);
         rowRenderer = row => `
-          <td>${row.source}</td>
-          <td>${row.medium}</td>
+          <td>${escapeHtml(row.source)}</td>
+          <td>${escapeHtml(row.medium)}</td>
           <td class="num">${formatNumber(row.sessions)}</td>
           <td class="num">${row.percentage}%</td>
         `;
@@ -723,7 +737,7 @@
         return;
       }
       elements.siteSelect.innerHTML = sites.map(site =>
-        `<option value="${site.id}">${site.domain}</option>`
+        `<option value="${escapeHtml(site.id)}">${escapeHtml(site.domain)}</option>`
       ).join('');
 
       state.siteId = sites[0].id;
@@ -747,7 +761,7 @@
 
       if (elements.filterBrowser && browsers.length > 0) {
         elements.filterBrowser.innerHTML = '<option value="">Todos</option>' +
-          browsers.map(b => `<option value="${b.browser}">${b.browser}</option>`).join('');
+          browsers.map(b => `<option value="${escapeHtml(b.browser)}">${escapeHtml(b.browser)}</option>`).join('');
       }
     } catch (e) {
       console.log('Error loading browser options:', e);
@@ -763,7 +777,7 @@
 
       if (elements.filterCountry && countries.length > 0) {
         elements.filterCountry.innerHTML = '<option value="">Todos</option>' +
-          countries.map(c => `<option value="${c.code}">${c.name}</option>`).join('');
+          countries.map(c => `<option value="${escapeHtml(c.code)}">${escapeHtml(c.name)}</option>`).join('');
       }
     } catch (e) {
       console.log('Error loading country options:', e);
@@ -779,7 +793,7 @@
 
       if (elements.filterCity && locationData.cities && locationData.cities.length > 0) {
         elements.filterCity.innerHTML = '<option value="">Todas</option>' +
-          locationData.cities.map(c => `<option value="${c.city}">${c.city}${c.countryCode ? ' (' + c.countryCode + ')' : ''}</option>`).join('');
+          locationData.cities.map(c => `<option value="${escapeHtml(c.city)}">${escapeHtml(c.city)}${c.countryCode ? ' (' + escapeHtml(c.countryCode) + ')' : ''}</option>`).join('');
       }
     } catch (e) {
       console.log('Error loading city options:', e);
@@ -797,7 +811,7 @@
       if (elements.filterUtmCampaign && utms.length > 0) {
         const campaigns = [...new Set(utms.map(u => u.campaign).filter(c => c))];
         elements.filterUtmCampaign.innerHTML = '<option value="">Todas</option>' +
-          campaigns.map(c => `<option value="${c}">${c}</option>`).join('');
+          campaigns.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
       }
     } catch (e) {
       console.log('Error loading UTM options:', e);
@@ -896,7 +910,7 @@
       renderTable('table-pages', data, row => {
         const displayText = row.title || row.path || '-';
         return `
-          <td title="${row.path}"><span class="text-truncate">${truncateText(displayText, 25)}</span></td>
+          <td title="${escapeHtml(row.path)}"><span class="text-truncate">${escapeHtml(truncateText(displayText, 25))}</span></td>
           <td class="num">${formatNumber(row.views)}</td>
           <td class="num">${formatNumber(row.uniqueVisitors)}</td>
         `;
@@ -923,7 +937,7 @@
       renderTable('table-clicks', data, row => {
         const displayText = row.elementText || row.elementId || 'Sin ID';
         return `
-          <td title="${row.elementId || ''}"><span class="text-truncate">${truncateText(displayText, 25)}</span></td>
+          <td title="${escapeHtml(row.elementId || '')}"><span class="text-truncate">${escapeHtml(truncateText(displayText, 25))}</span></td>
           <td class="num">${formatNumber(row.clicks)}</td>
         `;
       });
@@ -947,7 +961,7 @@
       exportData.referrers = data;
 
       renderTable('table-referrers', data, row => `
-        <td title="${row.referrer}"><span class="text-truncate">${getHostname(row.referrer)}</span></td>
+        <td title="${escapeHtml(row.referrer)}"><span class="text-truncate">${escapeHtml(getHostname(row.referrer))}</span></td>
         <td class="num">${formatNumber(row.sessions)}</td>
       `);
     } catch (error) {
@@ -972,7 +986,7 @@
       renderTable('table-utms', data, row => {
         const displayText = row.campaign ? `${row.source} / ${row.campaign}` : row.source;
         return `
-          <td title="${displayText}"><span class="text-truncate">${truncateText(displayText, 20)}</span></td>
+          <td title="${escapeHtml(displayText)}"><span class="text-truncate">${escapeHtml(truncateText(displayText, 20))}</span></td>
           <td class="num">${formatNumber(row.sessions)}</td>
         `;
       });
@@ -1083,13 +1097,13 @@
     // Data rows
     data.heatmap.forEach(day => {
       html += '<div class="heatmap-row-data">';
-      html += `<div class="heatmap-day-label">${day.dayName}</div>`;
+      html += `<div class="heatmap-day-label">${escapeHtml(day.dayName)}</div>`;
       html += '<div class="heatmap-cells">';
 
       day.hours.forEach(hourData => {
         const value = metric === 'pageviews' ? hourData.pageviews : hourData.visitors;
         const intensity = maxValue > 0 ? Math.round((value / maxValue) * 10) : 0;
-        const tooltipText = `${day.dayName} ${hourData.hour}:00 - ${formatNumber(value)} ${metric === 'pageviews' ? 'pageviews' : 'visitantes'}`;
+        const tooltipText = escapeHtml(`${day.dayName} ${hourData.hour}:00 - ${formatNumber(value)} ${metric === 'pageviews' ? 'pageviews' : 'visitantes'}`);
 
         html += `<div class="heatmap-cell" data-intensity="${intensity}" title="${tooltipText}">`;
         html += value > 0 ? (value > 999 ? Math.round(value / 1000) + 'k' : value) : '';
@@ -1152,8 +1166,8 @@
 
       // Render detail table
       renderTable('table-sources-detail', data, row => `
-        <td>${row.source}</td>
-        <td>${row.medium}</td>
+        <td>${escapeHtml(row.source)}</td>
+        <td>${escapeHtml(row.medium)}</td>
         <td class="num">${formatNumber(row.sessions)}</td>
         <td class="num">${row.percentage}%</td>
       `);
@@ -1179,9 +1193,9 @@
       });
 
       renderTable('table-utms-detail', data, row => `
-        <td>${row.source || '-'}</td>
-        <td>${row.medium || '-'}</td>
-        <td>${row.campaign || '-'}</td>
+        <td>${escapeHtml(row.source || '-')}</td>
+        <td>${escapeHtml(row.medium || '-')}</td>
+        <td>${escapeHtml(row.campaign || '-')}</td>
         <td class="num">${formatNumber(row.sessions)}</td>
       `);
     } catch (error) {
@@ -1203,8 +1217,8 @@
       });
 
       renderTable('table-pages-detail', data, row => `
-        <td title="${row.path}"><span class="text-truncate">${truncateText(row.path, 40)}</span></td>
-        <td><span class="text-truncate">${truncateText(row.title, 30)}</span></td>
+        <td title="${escapeHtml(row.path)}"><span class="text-truncate">${escapeHtml(truncateText(row.path, 40))}</span></td>
+        <td><span class="text-truncate">${escapeHtml(truncateText(row.title, 30))}</span></td>
         <td class="num">${formatNumber(row.views)}</td>
         <td class="num">${formatNumber(row.uniqueVisitors)}</td>
       `);
@@ -1232,7 +1246,7 @@
 
       // Render table
       renderTable('table-events-detail', data, row => `
-        <td>${row.type}</td>
+        <td>${escapeHtml(row.type)}</td>
         <td class="num">${formatNumber(row.count)}</td>
         <td class="num">${total > 0 ? Math.round((row.count / total) * 100) : 0}%</td>
       `);
@@ -1255,9 +1269,9 @@
       });
 
       renderTable('table-clicks-detail', data, row => `
-        <td>${row.elementId || '-'}</td>
-        <td><span class="text-truncate">${truncateText(row.elementText, 30)}</span></td>
-        <td>${row.elementTag || '-'}</td>
+        <td>${escapeHtml(row.elementId || '-')}</td>
+        <td><span class="text-truncate">${escapeHtml(truncateText(row.elementText, 30))}</span></td>
+        <td>${escapeHtml(row.elementTag || '-')}</td>
         <td class="num">${formatNumber(row.clicks)}</td>
       `);
     } catch (error) {
@@ -1296,7 +1310,7 @@
 
       // Top forms table
       renderTable('table-conversions-forms', data.topForms, row => `
-        <td>${row.formId || '-'}</td>
+        <td>${escapeHtml(row.formId || '-')}</td>
         <td class="num">${formatNumber(row.submits)}</td>
         <td class="num">${formatNumber(row.starts)}</td>
         <td class="num">${row.rate}%</td>
@@ -1304,7 +1318,7 @@
 
       // Top phones table
       renderTable('table-conversions-phones', data.topPhones, row => `
-        <td>${row.phoneNumber || '-'}</td>
+        <td>${escapeHtml(row.phoneNumber || '-')}</td>
         <td class="num">${formatNumber(row.clicks)}</td>
       `);
 
@@ -1412,12 +1426,12 @@
 
       // Products tables
       renderTable('table-products-viewed', products.mostViewed, row => `
-        <td title="${row.productId}"><span class="text-truncate">${truncateText(row.productName, 35)}</span></td>
+        <td title="${escapeHtml(row.productId)}"><span class="text-truncate">${escapeHtml(truncateText(row.productName, 35))}</span></td>
         <td class="num">${formatNumber(row.views)}</td>
       `);
 
       renderTable('table-products-added', products.mostAdded, row => `
-        <td title="${row.productId}"><span class="text-truncate">${truncateText(row.productName, 35)}</span></td>
+        <td title="${escapeHtml(row.productId)}"><span class="text-truncate">${escapeHtml(truncateText(row.productName, 35))}</span></td>
         <td class="num">${formatNumber(row.adds)}</td>
       `);
     } catch (error) {
@@ -1483,16 +1497,16 @@
 
       // Countries table
       renderTable('table-countries', data.countries, row => `
-        <td>${row.name}</td>
+        <td>${escapeHtml(row.name)}</td>
         <td class="num">${formatNumber(row.visitors || row.sessions)}</td>
         <td class="num">${row.percentage}%</td>
       `);
 
       // Cities table (con region y country name)
       renderTable('table-cities', data.cities, row => `
-        <td>${row.city}</td>
-        <td>${row.region || '-'}</td>
-        <td>${row.countryName || row.countryCode}</td>
+        <td>${escapeHtml(row.city)}</td>
+        <td>${escapeHtml(row.region || '-')}</td>
+        <td>${escapeHtml(row.countryName || row.countryCode)}</td>
         <td class="num">${formatNumber(row.visitors || row.sessions)}</td>
       `);
     } catch (error) {
@@ -1519,7 +1533,7 @@
       });
 
       renderTable('table-sections-report', data, row => `
-        <td>${row.pagePath}</td>
+        <td>${escapeHtml(row.pagePath)}</td>
         <td class="num">${formatNumber(row.views)}</td>
         <td class="num">${formatNumber(row.uniqueVisitors)}</td>
         <td class="num">${row.percentage}%</td>
@@ -1550,7 +1564,7 @@
       renderDistributionChart('chart-devices-detail', 'devicesDetail', chartData, chartType);
 
       renderTable('table-devices-detail', data, row => `
-        <td>${row.device || 'Desconocido'}</td>
+        <td>${escapeHtml(row.device || 'Desconocido')}</td>
         <td class="num">${formatNumber(row.sessions)}</td>
         <td class="num">${total > 0 ? Math.round((row.sessions / total) * 100) : 0}%</td>
       `);
@@ -1578,7 +1592,7 @@
       renderDistributionChart('chart-browsers-detail', 'browsersDetail', chartDataArr, chartType);
 
       renderTable('table-browsers-detail', data, row => `
-        <td>${row.browser || 'Desconocido'}</td>
+        <td>${escapeHtml(row.browser || 'Desconocido')}</td>
         <td class="num">${formatNumber(row.sessions)}</td>
         <td class="num">${total > 0 ? Math.round((row.sessions / total) * 100) : 0}%</td>
       `);
@@ -1610,14 +1624,14 @@
 
       // Update pages table
       renderTable('table-realtime-pages', data.recentPages, row => `
-        <td><span class="text-truncate">${truncateText(row.path, 30)}</span></td>
+        <td><span class="text-truncate">${escapeHtml(truncateText(row.path, 30))}</span></td>
         <td class="num">${row.visitors}</td>
       `);
 
       // Update events table
       renderTable('table-realtime-events', data.recentEvents, row => `
-        <td>${row.type}</td>
-        <td><span class="text-truncate">${truncateText(row.page, 25)}</span></td>
+        <td>${escapeHtml(row.type)}</td>
+        <td><span class="text-truncate">${escapeHtml(truncateText(row.page, 25))}</span></td>
         <td class="num">${timeAgo(row.occurredAt)}</td>
       `);
 
@@ -1627,7 +1641,7 @@
         const devices = data.byDevice || {};
         deviceList.innerHTML = Object.entries(devices).map(([device, count]) => `
           <div class="realtime-device-item">
-            <span class="realtime-device-name">${device || 'Desconocido'}</span>
+            <span class="realtime-device-name">${escapeHtml(device || 'Desconocido')}</span>
             <span class="realtime-device-count">${count}</span>
           </div>
         `).join('') || '<p class="empty-state">Sin datos</p>';
@@ -1635,8 +1649,8 @@
 
       // Update sources table
       renderTable('table-realtime-sources', data.bySources || [], row => `
-        <td>${row.source}</td>
-        <td>${row.medium}</td>
+        <td>${escapeHtml(row.source)}</td>
+        <td>${escapeHtml(row.medium)}</td>
         <td class="num">${row.sessions}</td>
       `);
 
@@ -1772,7 +1786,7 @@
 
       if (elements.filterCountry && countries.length > 0) {
         elements.filterCountry.innerHTML = '<option value="">Todos</option>' +
-          countries.map(c => `<option value="${c.code}">${c.name}</option>`).join('');
+          countries.map(c => `<option value="${escapeHtml(c.code)}">${escapeHtml(c.name)}</option>`).join('');
       }
     } catch (e) {
       console.log('Error loading country filter:', e);
@@ -1790,7 +1804,7 @@
 
       if (elements.filterCity && data.cities && data.cities.length > 0) {
         elements.filterCity.innerHTML = '<option value="">Todas</option>' +
-          data.cities.map(c => `<option value="${c.city}">${c.city}${c.countryCode ? ' (' + c.countryCode + ')' : ''}</option>`).join('');
+          data.cities.map(c => `<option value="${escapeHtml(c.city)}">${escapeHtml(c.city)}${c.countryCode ? ' (' + escapeHtml(c.countryCode) + ')' : ''}</option>`).join('');
       }
     } catch (e) {
       console.log('Error loading city filter:', e);
@@ -2895,8 +2909,8 @@
       <div class="pdf-header">
         <h1 class="pdf-title">MiComercio Analytics</h1>
         <div class="pdf-subtitle">
-          Sitio: <strong>${siteName}</strong><br>
-          Seccion: <strong>${sectionTitle}</strong><br>
+          Sitio: <strong>${escapeHtml(siteName)}</strong><br>
+          Seccion: <strong>${escapeHtml(sectionTitle)}</strong><br>
           Periodo: ${state.startDate} a ${state.endDate}<br>
           Generado: ${generatedAt}
         </div>
@@ -2952,7 +2966,7 @@
       if (exportData.trend && exportData.trend.length > 0) {
         previewHtml += `<div class="pdf-section-title">Tendencia Diaria</div><table><tr><th>Fecha</th><th class="num">Pageviews</th><th class="num">Sesiones</th><th class="num">Visitantes</th></tr>`;
         exportData.trend.forEach(row => {
-          previewHtml += `<tr><td>${row.date}</td><td class="num">${row.pageviews}</td><td class="num">${row.sessions}</td><td class="num">${row.visitors}</td></tr>`;
+          previewHtml += `<tr><td>${escapeHtml(row.date)}</td><td class="num">${row.pageviews}</td><td class="num">${row.sessions}</td><td class="num">${row.visitors}</td></tr>`;
         });
         previewHtml += `</table>`;
       }
@@ -2960,7 +2974,7 @@
       if (exportData.pages && exportData.pages.length > 0) {
         previewHtml += `<div class="pdf-section-title">Top Paginas</div><table><tr><th>Pagina</th><th>Titulo</th><th class="num">Vistas</th><th class="num">Visitantes</th></tr>`;
         exportData.pages.forEach(row => {
-          previewHtml += `<tr><td>${row.path || ''}</td><td>${row.title || ''}</td><td class="num">${row.views}</td><td class="num">${row.uniqueVisitors}</td></tr>`;
+          previewHtml += `<tr><td>${escapeHtml(row.path || '')}</td><td>${escapeHtml(row.title || '')}</td><td class="num">${row.views}</td><td class="num">${row.uniqueVisitors}</td></tr>`;
         });
         previewHtml += `</table>`;
       }
@@ -2968,7 +2982,7 @@
       if (exportData.clicks && exportData.clicks.length > 0) {
         previewHtml += `<div class="pdf-section-title">Top Clicks</div><table><tr><th>Identificador</th><th>Texto</th><th>Elemento</th><th class="num">Clicks</th></tr>`;
         exportData.clicks.forEach(row => {
-          previewHtml += `<tr><td>${row.elementId || ''}</td><td>${row.elementText || ''}</td><td>${row.elementTag || ''}</td><td class="num">${row.clicks}</td></tr>`;
+          previewHtml += `<tr><td>${escapeHtml(row.elementId || '')}</td><td>${escapeHtml(row.elementText || '')}</td><td>${escapeHtml(row.elementTag || '')}</td><td class="num">${row.clicks}</td></tr>`;
         });
         previewHtml += `</table>`;
       }
@@ -2976,7 +2990,7 @@
       if (exportData.referrers && exportData.referrers.length > 0) {
         previewHtml += `<div class="pdf-section-title">Fuentes de Trafico</div><table><tr><th>Referrer</th><th class="num">Sesiones</th></tr>`;
         exportData.referrers.forEach(row => {
-          previewHtml += `<tr><td>${row.referrer}</td><td class="num">${row.sessions}</td></tr>`;
+          previewHtml += `<tr><td>${escapeHtml(row.referrer)}</td><td class="num">${row.sessions}</td></tr>`;
         });
         previewHtml += `</table>`;
       }
@@ -2984,7 +2998,7 @@
       if (exportData.utms && exportData.utms.length > 0) {
         previewHtml += `<div class="pdf-section-title">Campanas UTM</div><table><tr><th>Source</th><th>Medium</th><th>Campaign</th><th class="num">Sesiones</th></tr>`;
         exportData.utms.forEach(row => {
-          previewHtml += `<tr><td>${row.source || ''}</td><td>${row.medium || ''}</td><td>${row.campaign || ''}</td><td class="num">${row.sessions}</td></tr>`;
+          previewHtml += `<tr><td>${escapeHtml(row.source || '')}</td><td>${escapeHtml(row.medium || '')}</td><td>${escapeHtml(row.campaign || '')}</td><td class="num">${row.sessions}</td></tr>`;
         });
         previewHtml += `</table>`;
       }
