@@ -1,0 +1,41 @@
+name: Generar plan de desarrollo desde Issue
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  generar_plan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🚚 Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: 🧠 Planificador — generar plan estructurado
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            Usa el subagente planificador definido en .claude/agents/planificador.md
+            para analizar el Issue #${{ github.event.issue.number }} de este repo
+            (título: "${{ github.event.issue.title }}") y generar el prompt de
+            desarrollo estructurado según el formato de salida que ese subagente
+            define (Objetivo, Alcance, Contexto, Archivos a tocar, Restricciones
+            de calidad, Criterio de validación, Preguntas abiertas si aplica).
+
+            Antes de planificar, lee CLAUDE.md y los skills relevantes en
+            .claude/skills/ tal como indica el subagente planificador.
+
+            NO escribas ni modifiques código. NO abras rama ni Pull Request.
+            Tu única salida es un comentario en este mismo Issue con el plan
+            estructurado, para que un humano lo apruebe antes de que empiece
+            cualquier desarrollo.
+
+            Cuerpo del Issue:
+            ${{ github.event.issue.body }}

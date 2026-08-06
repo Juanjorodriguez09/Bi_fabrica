@@ -1,0 +1,61 @@
+name: Solicitud de cambio
+description: Pide un ajuste, mejora o funcionalidad nueva para micomercio_bi_dashboard
+title: "[Solicitud]: "
+labels: ["solicitud"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Completa estos campos tal como los necesita el flujo de la fábrica:
+        el subagente planificador los va a leer para generar el prompt de
+        desarrollo, así que entre más concreto seas, menos preguntas
+        abiertas va a dejar.
+
+  - type: textarea
+    id: objetivo
+    attributes:
+      label: Objetivo
+      description: Qué se quiere lograr, en una o dos frases.
+      placeholder: "Ej: agregar un filtro por rango de edad en la sección de audiencia"
+    validations:
+      required: true
+
+  - type: textarea
+    id: alcance
+    attributes:
+      label: Alcance
+      description: Qué SÍ incluye este cambio y qué explícitamente NO.
+    validations:
+      required: true
+
+  - type: textarea
+    id: contexto
+    attributes:
+      label: Contexto
+      description: Por qué se pide esto, quién lo pidió, o cualquier antecedente relevante.
+    validations:
+      required: false
+
+  - type: textarea
+    id: restricciones
+    attributes:
+      label: Restricciones de calidad
+      description: Reglas que no se pueden romper para este cambio, más allá de las que ya aplican siempre (ver CLAUDE.md).
+    validations:
+      required: false
+
+  - type: textarea
+    id: criterio_validacion
+    attributes:
+      label: Criterio de validación
+      description: Cómo se sabe que el cambio quedó bien hecho — qué se debe poder probar y qué resultado se espera.
+    validations:
+      required: true
+
+  - type: textarea
+    id: salida_esperada
+    attributes:
+      label: Salida esperada
+      description: Qué se espera ver al final (endpoint nuevo, cambio visual, reporte, etc.).
+    validations:
+      required: true
