@@ -22,6 +22,7 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          show_full_output: true
           prompt: |
             Usa el subagente planificador definido en .claude/agents/planificador.md
             para analizar el Issue #${{ github.event.issue.number }} de este repo
