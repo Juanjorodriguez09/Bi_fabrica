@@ -25,11 +25,18 @@ jobs:
           show_full_output: true
           prompt: |
             Usa el subagente planificador definido en .claude/agents/planificador.md
-            para analizar el Issue #${{ github.event.issue.number }} de este repo
-            (título: "${{ github.event.issue.title }}") y generar el prompt de
-            desarrollo estructurado según el formato de salida que ese subagente
+            para analizar la siguiente solicitud (Issue #${{ github.event.issue.number }}
+            de este repo, título: "${{ github.event.issue.title }}") y generar el prompt
+            de desarrollo estructurado según el formato de salida que ese subagente
             define (Objetivo, Alcance, Contexto, Archivos a tocar, Restricciones
             de calidad, Criterio de validación, Preguntas abiertas si aplica).
+
+            El cuerpo completo del Issue ya está incluido abajo, tal cual. NO ejecutes
+            `gh issue view`, git, ni ningún otro comando de Bash para volver a
+            consultarlo o para cualquier otro fin — no tienes acceso a Bash en este
+            entorno y cualquier intento quedará bloqueado sin que nadie lo apruebe,
+            terminando la tarea sin resultado. Todo lo que necesitas ya está aquí o
+            se lee con Read/Grep/Glob dentro del repo ya clonado.
 
             Antes de planificar, lee CLAUDE.md y los skills relevantes en
             .claude/skills/ tal como indica el subagente planificador.
