@@ -23,6 +23,12 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           show_full_output: true
+          settings: |
+            {
+              "permissions": {
+                "allow": ["Bash(gh issue comment *)"]
+              }
+            }
           prompt: |
             Usa el subagente planificador definido en .claude/agents/planificador.md
             para analizar la siguiente solicitud (Issue #${{ github.event.issue.number }}
@@ -32,19 +38,29 @@ jobs:
             de calidad, Criterio de validación, Preguntas abiertas si aplica).
 
             El cuerpo completo del Issue ya está incluido abajo, tal cual. NO ejecutes
-            `gh issue view`, git, ni ningún otro comando de Bash para volver a
-            consultarlo o para cualquier otro fin — no tienes acceso a Bash en este
-            entorno y cualquier intento quedará bloqueado sin que nadie lo apruebe,
-            terminando la tarea sin resultado. Todo lo que necesitas ya está aquí o
-            se lee con Read/Grep/Glob dentro del repo ya clonado.
+            `gh issue view`, git, ni ningún otro comando para volver a consultarlo —
+            todo lo que necesitas ya está aquí o se lee con Read/Grep/Glob dentro del
+            repo ya clonado.
 
             Antes de planificar, lee CLAUDE.md y los skills relevantes en
             .claude/skills/ tal como indica el subagente planificador.
 
             NO escribas ni modifiques código. NO abras rama ni Pull Request.
-            Tu única salida es un comentario en este mismo Issue con el plan
-            estructurado, para que un humano lo apruebe antes de que empiece
-            cualquier desarrollo.
+
+            Cuando el subagente planificador te devuelva el plan, tu ÚLTIMO paso
+            obligatorio es publicarlo como comentario en este mismo Issue, para que
+            un humano lo apruebe antes de que empiece cualquier desarrollo. El único
+            comando de Bash autorizado en este entorno es `gh issue comment` — usa
+            exactamente:
+
+            ```
+            gh issue comment ${{ github.event.issue.number }} --body-file <ruta-a-un-archivo-temporal-con-el-plan>
+            ```
+
+            (escribe el plan a un archivo temporal con la herramienta Write antes de
+            correr ese comando). Ningún otro comando de Bash está autorizado y quedará
+            bloqueado — no lo intentes. La tarea no está completa hasta que el
+            comentario quede publicado en el Issue.
 
             Cuerpo del Issue:
             ${{ github.event.issue.body }}
