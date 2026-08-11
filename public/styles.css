@@ -780,6 +780,60 @@ body.sidebar-collapsed .main-wrapper {
   font-weight: 500;
 }
 
+.card-label-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Tooltip for KPI card help icon (same data-tooltip + ::after pattern as .sidebar.collapsed .nav-link) */
+.card-help-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
+  color: var(--color-gray);
+  cursor: help;
+}
+
+.card-help-icon:hover,
+.card-help-icon:focus-visible {
+  color: var(--color-primary);
+}
+
+.card-help-icon::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--color-navy);
+  color: var(--color-white);
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+  white-space: normal;
+  width: 200px;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease;
+  margin-bottom: 8px;
+  z-index: 1000;
+  box-shadow: var(--shadow-md);
+  pointer-events: none;
+}
+
+.card-help-icon:hover::after,
+.card-help-icon:focus-visible::after {
+  opacity: 1;
+  visibility: visible;
+}
+
 .summary-card[data-metric="sessions"] .card-icon {
   background: rgba(3, 4, 94, 0.08);
   color: var(--color-navy);
