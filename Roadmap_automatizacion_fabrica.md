@@ -13,14 +13,14 @@
 | # | Paso del flujo propuesto | Estado | Evidencia |
 |---|---|---|---|
 | 1 | Solicitud del cliente/humano | 🟡 Decidido, no construido | `Contexto_fabrica_software.md` §3: "quien la redacta decide en qué repo se abre el issue" — decisión tomada, ningún mecanismo formal creado todavía |
-| 2 | Issue como entrada formal | 🟡 Construido, sin probar en vivo | `.github/ISSUE_TEMPLATE/solicitud-cambio.yml` — campos objetivo/alcance/contexto/restricciones/criterio de validación/salida esperada |
-| 3 | Activación con GitHub Actions (desde el Issue) | 🟡 Construido, sin probar en vivo | `.github/workflows/generar-plan.yml`, dispara con `issues: [opened]`. Falta abrir un Issue real y ver si corre bien — depende del secret `CLAUDE_CODE_OAUTH_TOKEN` en el repo, generado con `claude setup-token` desde una cuenta con plan Pro/Max/Team/Enterprise (consume cuota de suscripción, no facturación por token — decisión tomada explícitamente para no pagar API aparte) |
-| 4 | Generación de prompt estructurado | 🟡 Construido, sin probar en vivo | Subagente `.claude/agents/planificador.md` — lee `CLAUDE.md` + skills relevantes y traduce el Issue a un prompt de desarrollo con formato fijo. Invocado desde `generar-plan.yml` |
-| 5 | Aprobación humana (de la intención/plan) | 🟡 Decidido, no probado en vivo | Mecanismo elegido: sesión en la nube de Claude Code + notificación push (no Remote Control local). `Contexto_fabrica_software.md` §3 y §6 lo marcan explícitamente como *"esto no se ha probado en vivo todavía"* |
-| 6 | Desarrollo automatizado | 🟢 Probado, pero manual/local, no disparado por Routine | El fix de XSS (`769d0f0`) se hizo con Claude Code local. Funciona bien, pero nadie lo disparó automáticamente desde un Issue — lo inició un humano en su terminal |
-| 7 | Push al repositorio | 🟢 Funciona, pero 100% manual hoy | Todos los commits del repo, incluido el de la fábrica (`97c9a24`), se pushean directo a `main` por el humano. No existe todavía el patrón "Routine → rama `claude/` → PR" que sí está *decidido* en `Contexto_fabrica_software.md` §3 |
-| 8 | Revisión automática por agentes | 🟢 **Construido y probado en un caso real** | 4 subagentes existen en `.claude/agents/`: `revisor-codigo`, `validador-metricas`, `documentador`, `tester`. Se ejecutaron en cadena sobre el fix de XSS con resultados concretos y accionables (ver `feedback.md`) |
-| 9 | Feedback y corrección | 🟢 **Probado en un caso real** | `feedback.md` documenta el ciclo completo: `revisor-codigo` encontró 1 hallazgo crítico + 2 menores en un primer pase, se corrigieron, y quedó verificado en un segundo pase antes de dar por cerrado el cambio |
+| 2 | Issue como entrada formal | 🟢 **Construido y probado en vivo** | `.github/ISSUE_TEMPLATE/solicitud-cambio.yml` — campos objetivo/alcance/contexto/restricciones/criterio de validación/salida esperada. Probado con 5 Issues reales (#1–#5) |
+| 3 | Activación con GitHub Actions (desde el Issue) | 🟢 **Construido y probado en vivo** | `.github/workflows/generar-plan.yml`, dispara con `issues: [opened]`, autenticado con `CLAUDE_CODE_OAUTH_TOKEN` (consume cuota de suscripción Pro/Max, no facturación por token). Run exitoso sobre el Issue #5 (`31499851757`) |
+| 4 | Generación de prompt estructurado | 🟢 **Construido y probado en vivo** | Subagente `.claude/agents/planificador.md` — lee `CLAUDE.md` + skills relevantes, investiga el código real, y traduce el Issue a un prompt de desarrollo con formato fijo. El plan del Issue #5 incluso detectó una ambigüedad real (nombre de la tarjeta KPI) y citó `DOCUMENTACION_TECNICA.md` para explicar el concepto de sesión |
+| 5 | Aprobación humana (de la intención/plan) | 🟢 **Probado en vivo, con matiz importante** | Se disparó una Routine cloud real (`trig_019EaCwvP4hsHoDUk2nFJGyD`) que implementó el plan del Issue #5 de punta a punta. La notificación push **sí llegó** al celular (entrega confirmada), pero **no bloqueó nada** — llegó cuando la Routine ya había terminado (push + PR incluidos), no como gate antes de una acción consecuente. La aprobación humana real en esta prueba fue *disparar la Routine a mano después de leer el plan*, no un permiso pedido a mitad de camino. Queda abierto si existe un modo que sí pause a esperar aprobación — ver gap #4 |
+| 6 | Desarrollo automatizado | 🟢 **Probado, ahora también vía Routine cloud** | El fix de XSS (`769d0f0`) se hizo con Claude Code local. Además, la Routine de prueba (§ paso 5) implementó el tooltip del Issue #5 de punta a punta en un entorno cloud (`micomercio-bi-dashboard-env`), sin intervención local — dos caminos probados: local manual, y cloud vía Routine |
+| 7 | Push al repositorio | 🟢 **Probado — patrón Routine → rama → PR confirmado** | La Routine de prueba creó la rama `claude/tooltip-sesiones`, commiteó, pusheó, y abrió el PR **#6** contra `main` sin mergear — exactamente el patrón decidido en `Contexto_fabrica_software.md` §3. El merge queda, a propósito, como paso manual separado |
+| 8 | Revisión automática por agentes | 🟢 **Construido y probado dos veces — con un hallazgo técnico** | 4 subagentes en `.claude/agents/`. Corrieron sobre el fix de XSS (`feedback.md`) **y** sobre el PR #6 real. En esta sesión local, `Agent` con `subagent_type: revisor-codigo/validador-metricas/documentador` **no resolvió** — el registro de subagentes de proyecto no cargó ni con `/reload-skills`. Se resolvió con un workaround: agentes `general-purpose` con las instrucciones completas del `.md` correspondiente pegadas en el prompt — mismo resultado, otro camino. Pendiente investigar la causa raíz (¿reload real requiere reiniciar sesión?) antes de asumir que este workaround hace falta siempre |
+| 9 | Feedback y corrección | 🟢 **Probado en dos casos reales, de punta a punta con Routine** | `feedback.md` (caso XSS) y PR #6 (caso tooltip): `revisor-codigo` encontró un desborde real de CSS en viewports angostos + 2 hallazgos menores; se disparó una segunda Routine que corrigió los 2 reales sobre la misma rama (sin abrir PR nuevo), comentó el PR, y quedó verificado con capturas de pantalla reales (Safari, 375px y desktop) antes de mergear. **PR #6 mergeado a `main`** (`44582eb`, 2026-08-13) |
 | 10 | Notificación de estado (Slack/Teams/email/GitHub) | ⚪ No abordado | No hay integración con ningún canal de notificación en el repo ni en la config de subagentes |
 | — | Deploy a servidor tras push a `main` | 🔴 Heredado del repo original, hoy roto en el clon | `.github/workflows/deploy-main.yml` es una copia exacta (byte a byte) del workflow del repo original `micomercio-co/micomercio_bi_dashboard`. Verificado por la API pública de GitHub: la única ejecución en este clon (`Juanjorodriguez09/Bi_fabrica`, run `30845049803`, commit `97c9a24`) **falló en el paso "🚀 Deploy via Rsync"** — los secrets de Contabo no están configurados (o están mal) en este repo. Ver §3 |
 
@@ -38,12 +38,16 @@ salida por notificación) están en cero — ni siquiera hay decisión de diseñ
 tomada para la notificación, y para el disparo por Issue la decisión es
 solo "cada humano elige el repo", sin mecanismo.
 
-El tramo **de desarrollo y push** (pasos 6 y 7) funciona, pero solo en su
-forma manual/local: un humano corre Claude Code en su terminal y pushea. La
-pieza que falta no es "que funcione", sino "que se dispare solo y pase por
-`claude/` + PR en vez de commit directo a `main`" — que es justo la
-arquitectura ya decidida en `Contexto_fabrica_software.md` §3, pendiente de
-construir.
+El tramo **de desarrollo y push** (pasos 6 y 7) ya tiene dos caminos
+probados: manual/local (el fix de XSS) y ahora también vía **Routine
+cloud** (rama `claude/tooltip-sesiones` → PR #6, sin mergear) — el patrón
+que `Contexto_fabrica_software.md` §3 dejaba como pendiente de construir ya
+está construido y confirmado en vivo. Lo que queda abierto no es si
+funciona, sino si el *disparo* de esa Routine puede pasar de "el humano la
+lanza a mano tras leer el plan" a "se dispara sola desde el Issue" — y si
+existe un mecanismo real de aprobación *bloqueante* a mitad de camino (ver
+§1 fila 5 y el gap #4), distinto de la notificación push informativa que sí
+quedó confirmada.
 
 **Un riesgo real, ya verificado — no una hipótesis:** este repo es un clon
 independiente que se creó a propósito para trabajar la fábrica *sin tocar*
@@ -117,35 +121,75 @@ propio par pre/prod separado, igual que se está corrigiendo acá.
 
 En orden de qué desbloquea qué:
 
-1. ~~**Formato de Issue como entrada formal**~~ — construido:
-   `.github/ISSUE_TEMPLATE/solicitud-cambio.yml`. Falta abrir un Issue real
-   para confirmar que el formulario se ve y se comporta como se espera.
-2. ~~**Workflow de GitHub Actions disparado por Issue**~~ — construido:
-   `.github/workflows/generar-plan.yml`, dispara con `issues: [opened]` y
-   corre `anthropics/claude-code-action@v1`, autenticado con
-   `CLAUDE_CODE_OAUTH_TOKEN` (consume cuota de suscripción Pro/Max, no
-   facturación por token — ver nota abajo). **Pendiente antes de la
-   primera prueba:** generar el token con `claude setup-token` (logueado
-   con la cuenta Pro, por ahora) y guardarlo como secret `CLAUDE_CODE_OAUTH_TOKEN`
-   en el repo (Settings → Secrets and variables → Actions).
-   **Importante — no es "configurar y olvidar":** ese token expira al año
-   y la renovación es manual, no automática — si nadie lo renueva, el
-   workflow empieza a fallar en silencio con error de autenticación. Vale
-   la pena poner un recordatorio (agosto 2027) el día que se genere.
-3. ~~**Subagente "planificador"**~~ — construido:
-   `.claude/agents/planificador.md`. Transforma el Issue en el prompt
-   estructurado del paso 4, sin escribir código ni tomar decisiones de
-   producto.
-4. **Validar en vivo la aprobación remota** — sesión en la nube + push a
-   la app móvil. Ya está *decidido* cómo hacerlo, falta *probarlo* una sola
-   vez de punta a punta.
-5. **Patrón Routine → rama `claude/` → PR** — hoy el desarrollo y el push
-   son manuales. Falta que una Routine dispare Claude Code, trabaje en una
-   rama `claude/...` y abra el PR sola, dejando el merge a un humano.
-6. **Notificación de estado** — elegir un solo canal para el MVP (probable
-   candidato: comentario automático en el propio Issue/PR de GitHub, que no
-   requiere credenciales nuevas de Slack/Teams) y conectarlo al final del
-   ciclo de revisión de agentes.
+1. ~~**Formato de Issue como entrada formal**~~ — construido y **probado
+   en vivo** (`.github/ISSUE_TEMPLATE/solicitud-cambio.yml`, Issues #1–#5).
+2. ~~**Workflow de GitHub Actions disparado por Issue**~~ — construido y
+   **probado en vivo** (`.github/workflows/generar-plan.yml`), autenticado
+   con `CLAUDE_CODE_OAUTH_TOKEN` (consume cuota de suscripción Pro/Max, no
+   facturación por token). **Importante — no es "configurar y olvidar":**
+   ese token expira al año y la renovación es manual, no automática — si
+   nadie lo renueva, el workflow empieza a fallar en silencio con error de
+   autenticación. Vale la pena poner un recordatorio (agosto 2027).
+3. ~~**Subagente "planificador"**~~ — construido y **probado en vivo**
+   (`.claude/agents/planificador.md`). En el Issue #5 investigó el código
+   real (no solo leyó el Issue), citó `DOCUMENTACION_TECNICA.md`, y dejó
+   preguntas abiertas explícitas en vez de asumir — exactamente el
+   comportamiento que se le pidió.
+
+**Cuatro fallas reales encontradas y corregidas en el camino hasta el
+primer éxito (Issue #5, run `31499851757`), documentadas por si se repite
+el patrón al extraer el Plugin reutilizable:**
+   - Faltaba `id-token: write` en `permissions` — sin él, la action no
+     puede obtener el token OIDC que necesita para autenticarse.
+   - La GitHub App "Claude Code" no estaba instalada en el repo — el
+     secret `CLAUDE_CODE_OAUTH_TOKEN` no es suficiente por sí solo.
+   - Sin restricción, Claude intentaba `gh issue view` para releer el
+     Issue (innecesario, el cuerpo ya viene en el prompt) y quedaba
+     bloqueado por el muro de aprobación de Bash en CI (nadie ahí para
+     aprobar) — se resolvió prohibiéndole Bash explícitamente en el prompt.
+   - Con Bash prohibido, el plan se generaba perfecto pero nunca quedaba
+     publicado: en "automation mode" (con `prompt` directo) la action
+     **nunca** postea el resultado sola — eso solo pasa en "interactive
+     mode" (menciones `@claude`), confirmado con la documentación oficial.
+     Se resolvió autorizando explícitamente solo `Bash(gh issue comment *)`
+     vía el input `settings`, e indicándole que ese es su último paso
+     obligatorio.
+4. ~~**Validar en vivo la aprobación remota**~~ — **probado**, con un
+   hallazgo importante: la notificación push llega (entrega confirmada),
+   pero no bloquea — la Routine corrió de punta a punta sin pausar, porque
+   `allowed_tools` ya autorizaba `Bash` de antemano (a diferencia del
+   GitHub Action, que exige aprobación por comando salvo que se
+   pre-autorice explícitamente vía `settings`). **Abierto:** si se quiere
+   el gate bloqueante literal (la IA se detiene sola a pedir aprobación
+   antes de pushear/abrir PR), falta investigar si existe ese modo — probar
+   una Routine sin `Bash` pre-autorizado y ver si el muro de permiso que
+   surge ahí sí dispara una notificación aprobable desde el celular. No es
+   bloqueante para seguir: el gate humano real de esta prueba (leer el plan
+   y disparar la Routine a mano) ya cumple la intención de fondo.
+5. ~~**Patrón Routine → rama `claude/` → PR**~~ — **probado en vivo, ciclo
+   completo hasta merge**: Routine `trig_019EaCwvP4hsHoDUk2nFJGyD`
+   implementó el plan del Issue #5, creó la rama `claude/tooltip-sesiones`,
+   commiteó, pusheó, abrió el PR #6, se revisó con los 4 subagentes, se
+   corrigió un hallazgo real con una segunda corrida de la Routine sobre la
+   misma rama, y se mergeó a `main` — el merge en sí siguió siendo, a
+   propósito, la única acción 100% manual del ciclo.
+5b. **Conectar el disparo: Issue aprobado → Routine automática (nuevo,
+   máxima prioridad).** Confirmado en la prueba del PR #6: los dos extremos
+   del flujo (Issue→plan, y Routine→PR) funcionan solos, pero *entre*
+   ellos un humano tiene que leer el plan y crear/disparar la Routine a
+   mano (vía `RemoteTrigger`/skill de scheduling) — no hay nada que
+   conecte "plan aprobado" con "Routine arranca". Sin esto, la fábrica no
+   corre de punta a punta sin operación manual intermedia, que es
+   justamente lo que se busca. Ideas a evaluar: un workflow de GitHub
+   Actions que reaccione a un comentario/label de aprobación en el Issue y
+   llame a la API de `RemoteTrigger` para crear y correr la Routine.
+6. **Notificación de estado** — elegir un solo canal para el MVP. Con el
+   hallazgo del punto 4, ahora hay dos candidatos confirmados que funcionan
+   sin credenciales nuevas: comentario automático en el Issue/PR de GitHub
+   (usado ya en el paso 1), o la notificación push al celular (entrega ya
+   confirmada, aunque hoy es del tipo "aviso", no interactiva) — falta
+   decidir cuál usar para qué caso y conectarlo al final del ciclo de
+   revisión de agentes.
 7. **Corregir y renombrar el deploy heredado** (§3) — **en espera**: requiere
    acceso a Contabo que el usuario no tiene por ahora. No bloquea nada del
    resto; se retoma cuando haya acceso.
@@ -169,29 +213,40 @@ Plugin reutilizable):
    sigue siendo la mina dormida documentada en §2 (riesgo bajo mientras
    nadie copie secrets del repo original), pero no es foco de trabajo
    actual. El resto del roadmap no depende de esto.
-1. **Cerrar la entrada del flujo en este mismo repo** — construido
-   (plantilla de Issue + workflow `generar-plan.yml` + subagente
-   `planificador`). Falta: (a) generar `CLAUDE_CODE_OAUTH_TOKEN` con
-   `claude setup-token` y guardarlo como secret del repo, y (b) abrir un
-   Issue real de prueba y confirmar que el plan que comenta el workflow es
-   correcto y no escribe código ni abre PR — la sintaxis del Action se
-   armó con investigación fresca de la documentación oficial, pero como
-   cualquier integración nueva, la primera corrida real es la que confirma
-   que quedó bien.
-2. **Probar la aprobación remota una vez, en vivo,** sobre un cambio
-   trivial (por ejemplo, un ajuste cosmético del dashboard), para no gastar
-   la primera prueba en algo que importe si falla.
-3. **Conectar el patrón Routine → `claude/` → PR** usando el mismo caso de
-   prueba del punto 2, reutilizando los 4 subagentes que ya funcionan
-   (`revisor-codigo`, `validador-metricas`, `documentador`, `tester`) tal
-   como están — no hace falta tocarlos para esta fase.
-4. **Agregar la notificación de estado** al final del ciclo de revisión,
+1. ~~**Cerrar la entrada del flujo en este mismo repo**~~ — **hecho y
+   confirmado en vivo** (Issue #5, run `31499851757`): plantilla de Issue
+   + workflow `generar-plan.yml` + subagente `planificador` funcionando de
+   punta a punta, plan publicado correctamente como comentario, sin
+   escribir código ni abrir rama/PR.
+2. ~~**Probar la aprobación remota una vez, en vivo**~~ — **hecho**: la
+   notificación push llega, pero no bloquea (ver gap #4 en §4). Investigar
+   el gate bloqueante literal queda como pendiente aparte, no bloqueante.
+3. ~~**Conectar el patrón Routine → `claude/` → PR**~~ — **hecho y
+   confirmado en vivo, ciclo completo**: Routine
+   `trig_019EaCwvP4hsHoDUk2nFJGyD` → rama `claude/tooltip-sesiones` → PR #6
+   → los 4 subagentes de revisión corrieron sobre el diff real (vía
+   workaround `general-purpose`, ver §1 fila 8) → encontraron un hallazgo
+   real → una segunda corrida de la misma Routine lo corrigió sobre la
+   misma rama → verificado con capturas → **mergeado a `main`**
+   (`44582eb`). Es el primer ciclo de la fábrica cerrado de punta a punta
+   sobre un cambio real.
+4. **Conectar el disparo: Issue aprobado → Routine automática.** Hoy cada
+   eslabón funciona (Issue→plan es automático vía `generar-plan.yml`;
+   plan→código→PR es automático vía Routine), pero **entre ambos sigue
+   habiendo un humano operando manualmente** — alguien lee el plan
+   comentado en el Issue y luego crea/dispara la Routine a mano vía el
+   skill de scheduling. Falta el pegamento: que aprobar el plan (ej. un
+   comentario o reacción en el Issue) dispare la Routine sola, sin que
+   nadie tenga que ir a crearla. Es el gap más grande que queda para que el
+   flujo corra realmente solo — ver conversación 2026-08-13.
+5. **Agregar la notificación de estado** al final del ciclo de revisión,
    como comentario automático en el PR (más simple que integrar Slack/Teams
-   para un primer MVP).
-5. **Solo después de que ese ciclo completo funcione una vez de punta a
-   punta en este repo**, extraer subagentes + skills hacia el Plugin
-   reutilizable (`Contexto_fabrica_software.md` §7) y probarlo en un segundo
-   proyecto.
+   para un primer MVP) — con el hallazgo de §4 gap #6, evaluar también usar
+   la notificación push ya confirmada como canal complementario.
+6. **Solo después de que ese ciclo completo funcione una vez de punta a
+   punta *sin operación manual intermedia***, extraer subagentes + skills
+   hacia el Plugin reutilizable (`Contexto_fabrica_software.md` §7) y
+   probarlo en un segundo proyecto.
 
 Lo que queda fuera de esta ruta a propósito, porque ya está resuelto o no es
 bloqueante para el MVP: integración de Codex como revisor cruzado, y el
