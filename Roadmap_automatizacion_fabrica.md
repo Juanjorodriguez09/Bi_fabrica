@@ -270,19 +270,23 @@ Plugin reutilizable):
    el flujo completo (Issue → plan → aprobación → código → PR) corre solo
    de punta a punta por primera vez; solo el merge final sigue siendo, a
    propósito, 100% manual. Detalle completo en §4 gap 5b.
-5. **Agregar la notificación de estado** al final del ciclo de revisión,
+5. **Conectar los 4 subagentes de revisión al flujo automático** —
+   probado *manualmente* sobre el PR #9 (workaround `general-purpose`,
+   ver §1 fila 8), no disparado solo todavía. Resultado del PR #9: sin
+   hallazgos de `validador-metricas` ni `documentador`; `revisor-codigo`
+   confirmó con evidencia (no solo "se ve bien") que el razonamiento
+   geométrico de la Routine sobre en qué breakpoint hacía falta el fix de
+   overflow fue correcto — **mergeado** (`d15d90c`, 2026-08-13). Falta que
+   esta revisión se dispare sola cuando la Routine abre el PR, en vez de
+   que un humano tenga que pedirla.
+6. **Agregar la notificación de estado** al final del ciclo de revisión,
    como comentario automático en el PR (más simple que integrar Slack/Teams
    para un primer MVP) — con el hallazgo de §4 gap #6, evaluar también usar
-   la notificación push ya confirmada como canal complementario. También
-   falta conectar los 4 subagentes de revisión (`revisor-codigo`, etc.) a
-   este flujo automático — en el PR #6 corrieron a mano; en el PR #9
-   todavía no corrieron.
-6. **Solo después de que ese ciclo completo funcione una vez de punta a
-   punta *sin operación manual intermedia***, extraer subagentes + skills
-   hacia el Plugin reutilizable (`Contexto_fabrica_software.md` §7) y
-   probarlo en un segundo proyecto. Con el punto 4 ya logrado, esto pasa a
-   ser el siguiente foco real, junto con conectar la revisión automática
-   (punto 5) al ciclo disparado por `/aprobar`.
+   la notificación push ya confirmada como canal complementario.
+7. **Solo después de que ese ciclo completo funcione una vez de punta a
+   punta *sin operación manual intermedia, incluida la revisión***,
+   extraer subagentes + skills hacia el Plugin reutilizable
+   (`Contexto_fabrica_software.md` §7) y probarlo en un segundo proyecto.
 
 Lo que queda fuera de esta ruta a propósito, porque ya está resuelto o no es
 bloqueante para el MVP: integración de Codex como revisor cruzado, y el
