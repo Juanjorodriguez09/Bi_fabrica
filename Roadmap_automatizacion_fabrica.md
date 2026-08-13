@@ -173,16 +173,44 @@ el patrón al extraer el Plugin reutilizable:**
    corrigió un hallazgo real con una segunda corrida de la Routine sobre la
    misma rama, y se mergeó a `main` — el merge en sí siguió siendo, a
    propósito, la única acción 100% manual del ciclo.
-5b. **Conectar el disparo: Issue aprobado → Routine automática (nuevo,
-   máxima prioridad).** Confirmado en la prueba del PR #6: los dos extremos
-   del flujo (Issue→plan, y Routine→PR) funcionan solos, pero *entre*
-   ellos un humano tiene que leer el plan y crear/disparar la Routine a
-   mano (vía `RemoteTrigger`/skill de scheduling) — no hay nada que
-   conecte "plan aprobado" con "Routine arranca". Sin esto, la fábrica no
-   corre de punta a punta sin operación manual intermedia, que es
-   justamente lo que se busca. Ideas a evaluar: un workflow de GitHub
-   Actions que reaccione a un comentario/label de aprobación en el Issue y
-   llame a la API de `RemoteTrigger` para crear y correr la Routine.
+5b. ~~**Conectar el disparo: Issue aprobado → Routine automática**~~ —
+   **construido y probado en vivo, ciclo completo sin operación manual
+   intermedia** (Issue #8, 2026-08-13). Piezas:
+   - La Routine se reescribió como **genérica** (`implementar-plan-aprobado`,
+     `trig_019EaCwvP4hsHoDUk2nFJGyD`): ya no tiene una tarea hardcodeada,
+     lee el número de Issue del payload de disparo, busca el plan
+     estructurado en los comentarios de ese Issue, y lo implementa.
+   - Label `solicitud` creada en el repo (GitHub Issue Forms **no crea
+     labels automáticamente** aunque el YAML del formulario las declare —
+     solo las aplica si ya existen; los Issues #1–#7 se crearon sin ella
+     sin que nadie lo notara, hasta que este workflow la necesitó).
+   - Token de disparo por API generado desde `claude.ai/code/routines`
+     ("Add an API trigger"), guardado como secret `ROUTINE_API_TOKEN`.
+   - `.github/workflows/disparar-routine.yml`: dispara con
+     `issue_comment: created`, valida que el comentario sea `/aprobar` de
+     alguien con permiso de escritura y que el Issue tenga la label
+     `solicitud`, y hace `curl` al endpoint
+     `POST api.anthropic.com/v1/claude_code/routines/{id}/fire` (API en
+     research preview, header `anthropic-beta:
+     experimental-cc-routine-2026-04-01`) — luego comenta de vuelta en el
+     Issue con el link de seguimiento de la sesión.
+   - **Prueba real de punta a punta:** Issue #8 (KPI "Visitantes") → plan
+     comentado por `planificador` (con una pregunta abierta no
+     bloqueante) → humano comenta `/aprobar` → GitHub Action dispara la
+     Routine (14 segundos después) → Routine implementa el tooltip,
+     **resuelve la pregunta abierta leyendo el código real** de
+     `getSummary()` en vez de inventar la definición, generaliza por su
+     cuenta el fix de desborde del PR #6 a un breakpoint nuevo (3
+     columnas, no se le pidió explícitamente), abre el **PR #9**, y
+     comenta de vuelta en el Issue enlazándolo. Nadie tocó nada entre el
+     `/aprobar` y el PR abierto.
+   - **Caso de borde ya observado y manejado correctamente:** el Issue #7
+     (KPI "Sesiones únicas") generó un plan que se **negó a proceder**
+     porque ese KPI no existe como tarjeta distinta de "Sesiones" — quedó
+     documentado como pregunta bloqueante en vez de que el planificador
+     inventara una interpretación. Ese Issue se dejó sin aprobar a
+     propósito, como evidencia de que el checkpoint humano funciona
+     también para frenar, no solo para avanzar.
 6. **Notificación de estado** — elegir un solo canal para el MVP. Con el
    hallazgo del punto 4, ahora hay dos candidatos confirmados que funcionan
    sin credenciales nuevas: comentario automático en el Issue/PR de GitHub
@@ -230,23 +258,31 @@ Plugin reutilizable):
    misma rama → verificado con capturas → **mergeado a `main`**
    (`44582eb`). Es el primer ciclo de la fábrica cerrado de punta a punta
    sobre un cambio real.
-4. **Conectar el disparo: Issue aprobado → Routine automática.** Hoy cada
-   eslabón funciona (Issue→plan es automático vía `generar-plan.yml`;
-   plan→código→PR es automático vía Routine), pero **entre ambos sigue
-   habiendo un humano operando manualmente** — alguien lee el plan
-   comentado en el Issue y luego crea/dispara la Routine a mano vía el
-   skill de scheduling. Falta el pegamento: que aprobar el plan (ej. un
-   comentario o reacción en el Issue) dispare la Routine sola, sin que
-   nadie tenga que ir a crearla. Es el gap más grande que queda para que el
-   flujo corra realmente solo — ver conversación 2026-08-13.
+4. ~~**Conectar el disparo: Issue aprobado → Routine automática**~~ —
+   **hecho y confirmado en vivo, sin operación manual intermedia**
+   (Issue #8, 2026-08-13). `disparar-routine.yml` + Routine genérica
+   `implementar-plan-aprobado` + label `solicitud`: un comentario
+   `/aprobar` dispara la Routine sola vía la API de Routines
+   (`POST .../routines/{id}/fire`), que implementó el tooltip de
+   "Visitantes", resolvió su propia pregunta abierta leyendo el código
+   real, y abrió el **PR #9** — 14 segundos entre el comentario y el
+   arranque de la Routine, cero intervención humana en el medio. Con esto,
+   el flujo completo (Issue → plan → aprobación → código → PR) corre solo
+   de punta a punta por primera vez; solo el merge final sigue siendo, a
+   propósito, 100% manual. Detalle completo en §4 gap 5b.
 5. **Agregar la notificación de estado** al final del ciclo de revisión,
    como comentario automático en el PR (más simple que integrar Slack/Teams
    para un primer MVP) — con el hallazgo de §4 gap #6, evaluar también usar
-   la notificación push ya confirmada como canal complementario.
+   la notificación push ya confirmada como canal complementario. También
+   falta conectar los 4 subagentes de revisión (`revisor-codigo`, etc.) a
+   este flujo automático — en el PR #6 corrieron a mano; en el PR #9
+   todavía no corrieron.
 6. **Solo después de que ese ciclo completo funcione una vez de punta a
    punta *sin operación manual intermedia***, extraer subagentes + skills
    hacia el Plugin reutilizable (`Contexto_fabrica_software.md` §7) y
-   probarlo en un segundo proyecto.
+   probarlo en un segundo proyecto. Con el punto 4 ya logrado, esto pasa a
+   ser el siguiente foco real, junto con conectar la revisión automática
+   (punto 5) al ciclo disparado por `/aprobar`.
 
 Lo que queda fuera de esta ruta a propósito, porque ya está resuelto o no es
 bloqueante para el MVP: integración de Codex como revisor cruzado, y el
