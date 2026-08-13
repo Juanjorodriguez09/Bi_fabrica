@@ -1,0 +1,84 @@
+name: Revisar PR abierto por Routine
+
+on:
+  pull_request:
+    types: [opened]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  id-token: write
+
+jobs:
+  revisar_pr:
+    if: startsWith(github.head_ref, 'claude/')
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🚚 Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Traer el diff del PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr diff ${{ github.event.pull_request.number }} --repo ${{ github.repository }} > /tmp/pr-diff.txt
+          echo "Líneas del diff: $(wc -l < /tmp/pr-diff.txt)"
+
+      - name: 🔍 Revisión con subagentes
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          show_full_output: true
+          settings: |
+            {
+              "permissions": {
+                "allow": ["Bash(gh pr comment *)"]
+              }
+            }
+          prompt: |
+            Estás revisando el PR #${{ github.event.pull_request.number }} de este repo
+            (micomercio_bi_dashboard), rama `${{ github.head_ref }}` contra `main`,
+            título: "${{ github.event.pull_request.title }}". Lo implementó una Routine
+            automática siguiendo un plan ya aprobado por un humano en un Issue.
+
+            El diff completo de este PR ya está escrito en el archivo /tmp/pr-diff.txt
+            en este mismo checkout — léelo con la herramienta Read antes de continuar.
+            NO ejecutes `gh pr diff`, `git diff` ni ningún otro comando para volver a
+            obtenerlo, ya lo tienes.
+
+            Corre estos tres subagentes de proyecto sobre ese diff, usando la
+            herramienta Task con el `subagent_type` exacto (ya están definidos en
+            .claude/agents/ de este repo, no necesitas leer sus instrucciones aparte,
+            invócalos directamente):
+
+            1. `revisor-codigo` — revisión de calidad del diff.
+            2. `validador-metricas` — solo si el diff toca dashboard.service.js o
+               cambia algún cálculo/query; si el diff es puramente frontend sin tocar
+               ese archivo, igual invócalo pero dile explícitamente que confirme que
+               no aplica en vez de omitirlo.
+            3. `documentador` — para confirmar si DOCUMENTACION_TECNICA.md necesita
+               actualizarse (dile explícitamente que NO aplique ningún cambio, solo
+               diagnostique).
+
+            NO invoques `tester` — no hay servidor local disponible en este entorno
+            cloud, ese subagente no puede correr aquí.
+
+            Cuando tengas los tres resultados, escribe UN solo comentario consolidado
+            (más severo primero, con secciones claras por subagente) a un archivo
+            temporal con la herramienta Write, y publícalo como comentario en este PR
+            con exactamente:
+
+            ```
+            gh pr comment ${{ github.event.pull_request.number }} --body-file <ruta-del-archivo>
+            ```
+
+            Ese es el único comando de Bash autorizado en este entorno — cualquier
+            otro comando de Bash quedará bloqueado, no lo intentes. La tarea no está
+            completa hasta que el comentario quede publicado.
+
+            NO escribas código, NO corrijas nada tú mismo, NO abras otra rama ni PR —
+            tu única salida es el comentario de revisión.
