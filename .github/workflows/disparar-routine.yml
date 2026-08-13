@@ -1,0 +1,52 @@
+name: Disparar Routine al aprobar plan
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  disparar_routine:
+    if: >
+      github.event.issue.pull_request == null &&
+      contains(fromJSON('["OWNER","COLLABORATOR","MEMBER"]'), github.event.comment.author_association) &&
+      (github.event.comment.body == '/aprobar' || startsWith(github.event.comment.body, '/aprobar'))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verificar que el Issue tiene la label "solicitud"
+        id: check
+        run: |
+          HAS_LABEL=$(jq -r '.issue.labels | map(.name == "solicitud") | any' "$GITHUB_EVENT_PATH")
+          echo "has_label=$HAS_LABEL" >> "$GITHUB_OUTPUT"
+
+      - name: 🚀 Disparar Routine vía API
+        if: steps.check.outputs.has_label == 'true'
+        id: fire
+        run: |
+          RESPONSE=$(curl -s -X POST "https://api.anthropic.com/v1/claude_code/routines/trig_019EaCwvP4hsHoDUk2nFJGyD/fire" \
+            -H "Authorization: Bearer ${{ secrets.ROUTINE_API_TOKEN }}" \
+            -H "anthropic-beta: experimental-cc-routine-2026-04-01" \
+            -H "anthropic-version: 2023-06-01" \
+            -H "Content-Type: application/json" \
+            -d "{\"text\": \"Issue #${{ github.event.issue.number }} de Juanjorodriguez09/Bi_fabrica fue aprobado por ${{ github.event.comment.user.login }} (comentario /aprobar). Implementa el plan de desarrollo ya comentado en ese Issue, siguiendo tus instrucciones.\"}")
+          echo "$RESPONSE"
+          echo "session_url=$(echo "$RESPONSE" | jq -r '.claude_code_session_url // empty')" >> "$GITHUB_OUTPUT"
+
+      - name: Comentar confirmación en el Issue
+        if: steps.check.outputs.has_label == 'true' && steps.fire.outputs.session_url != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue comment ${{ github.event.issue.number }} --repo ${{ github.repository }} \
+            --body "🚀 Plan aprobado — Routine disparada para implementarlo. Seguimiento: ${{ steps.fire.outputs.session_url }}"
+
+      - name: Avisar si faltó la label "solicitud"
+        if: steps.check.outputs.has_label != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue comment ${{ github.event.issue.number }} --repo ${{ github.repository }} \
+            --body "⚠️ No disparé la Routine: este Issue no tiene la label \`solicitud\` (la que agrega automáticamente la plantilla solicitud-cambio.yml). Si esto no viene de esa plantilla, no hay un plan estructurado que implementar."
