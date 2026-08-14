@@ -25,8 +25,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh pr diff ${{ github.event.pull_request.number }} --repo ${{ github.repository }} > /tmp/pr-diff.txt
-          echo "Líneas del diff: $(wc -l < /tmp/pr-diff.txt)"
+          gh pr diff ${{ github.event.pull_request.number }} --repo ${{ github.repository }} > pr-diff.txt
+          echo "Líneas del diff: $(wc -l < pr-diff.txt)"
 
       - name: 🔍 Revisión con subagentes
         uses: anthropics/claude-code-action@v1
@@ -45,10 +45,11 @@ jobs:
             título: "${{ github.event.pull_request.title }}". Lo implementó una Routine
             automática siguiendo un plan ya aprobado por un humano en un Issue.
 
-            El diff completo de este PR ya está escrito en el archivo /tmp/pr-diff.txt
-            en este mismo checkout — léelo con la herramienta Read antes de continuar.
-            NO ejecutes `gh pr diff`, `git diff` ni ningún otro comando para volver a
-            obtenerlo, ya lo tienes.
+            El diff completo de este PR ya está escrito en el archivo pr-diff.txt en
+            la raíz de este mismo checkout (ruta relativa al repo, NO en /tmp — fuera
+            del checkout no tienes permiso de lectura automático) — léelo con la
+            herramienta Read antes de continuar. NO ejecutes `gh pr diff`, `git diff`
+            ni ningún otro comando para volver a obtenerlo, ya lo tienes.
 
             Corre estos tres subagentes de proyecto sobre ese diff, usando la
             herramienta Task con el `subagent_type` exacto (ya están definidos en
