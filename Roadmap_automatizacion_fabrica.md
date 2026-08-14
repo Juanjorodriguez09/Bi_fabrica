@@ -19,8 +19,8 @@
 | 5 | Aprobación humana (de la intención/plan) | 🟢 **Probado en vivo, con matiz importante** | Se disparó una Routine cloud real (`trig_019EaCwvP4hsHoDUk2nFJGyD`) que implementó el plan del Issue #5 de punta a punta. La notificación push **sí llegó** al celular (entrega confirmada), pero **no bloqueó nada** — llegó cuando la Routine ya había terminado (push + PR incluidos), no como gate antes de una acción consecuente. La aprobación humana real en esta prueba fue *disparar la Routine a mano después de leer el plan*, no un permiso pedido a mitad de camino. Queda abierto si existe un modo que sí pause a esperar aprobación — ver gap #4 |
 | 6 | Desarrollo automatizado | 🟢 **Probado, ahora también vía Routine cloud** | El fix de XSS (`769d0f0`) se hizo con Claude Code local. Además, la Routine de prueba (§ paso 5) implementó el tooltip del Issue #5 de punta a punta en un entorno cloud (`micomercio-bi-dashboard-env`), sin intervención local — dos caminos probados: local manual, y cloud vía Routine |
 | 7 | Push al repositorio | 🟢 **Probado — patrón Routine → rama → PR confirmado** | La Routine de prueba creó la rama `claude/tooltip-sesiones`, commiteó, pusheó, y abrió el PR **#6** contra `main` sin mergear — exactamente el patrón decidido en `Contexto_fabrica_software.md` §3. El merge queda, a propósito, como paso manual separado |
-| 8 | Revisión automática por agentes | 🟢 **Construido y probado dos veces — con un hallazgo técnico** | 4 subagentes en `.claude/agents/`. Corrieron sobre el fix de XSS (`feedback.md`) **y** sobre el PR #6 real. En esta sesión local, `Agent` con `subagent_type: revisor-codigo/validador-metricas/documentador` **no resolvió** — el registro de subagentes de proyecto no cargó ni con `/reload-skills`. Se resolvió con un workaround: agentes `general-purpose` con las instrucciones completas del `.md` correspondiente pegadas en el prompt — mismo resultado, otro camino. Pendiente investigar la causa raíz (¿reload real requiere reiniciar sesión?) antes de asumir que este workaround hace falta siempre |
-| 9 | Feedback y corrección | 🟢 **Probado en dos casos reales, de punta a punta con Routine** | `feedback.md` (caso XSS) y PR #6 (caso tooltip): `revisor-codigo` encontró un desborde real de CSS en viewports angostos + 2 hallazgos menores; se disparó una segunda Routine que corrigió los 2 reales sobre la misma rama (sin abrir PR nuevo), comentó el PR, y quedó verificado con capturas de pantalla reales (Safari, 375px y desktop) antes de mergear. **PR #6 mergeado a `main`** (`44582eb`, 2026-08-13) |
+| 8 | Revisión automática por agentes | 🟢 **Construido, probado, y ahora 100% automático** | 4 subagentes en `.claude/agents/` (`tester` excluido de lo automático, necesita servidor local). `revisar-pr.yml` (2026-08-14) dispara solo con `pull_request: opened/synchronize` en ramas `claude/**`, corre los 3 restantes vía `Task`, publica comentario consolidado marcando cada hallazgo REAL/CRÍTICO vs COSMÉTICO/INFORMATIVO. Camino recorrido: manual en local (fix XSS) → manual con workaround `general-purpose` (PRs #6, #9, #12 — resolución por nombre de subagente sigue sin funcionar en esta sesión CLI local, causa raíz no confirmada) → 100% automático dentro de `claude-code-action` en GitHub Actions (PR #12, `synchronize`, sin workaround necesario ahí) |
+| 9 | Feedback y corrección | 🟢 **Probado en tres casos reales; auto-corrección construida** | `feedback.md` (XSS) y PR #6: `revisor-codigo` encontró un desborde real de CSS + 2 menores, corregidos con una segunda Routine manual, verificado con capturas, mergeado (`44582eb`). PR #9: sin hallazgos. PR #12: único hallazgo clasificado COSMÉTICO, sin corrección disparada (correcto). Desde 2026-08-14 existe además una Routine dedicada **"corregir-hallazgos-pr"** que `revisar-pr.yml` dispara sola cuando hay ≥1 hallazgo REAL/CRÍTICO (máx. 1 corrección automática por PR) — la lógica de "no disparar" ya se confirmó en vivo, la de "sí disparar" todavía no tuvo un caso real que la ejercite |
 | 10 | Notificación de estado (Slack/Teams/email/GitHub) | ⚪ No abordado | No hay integración con ningún canal de notificación en el repo ni en la config de subagentes |
 | — | Deploy a servidor tras push a `main` | 🔴 Heredado del repo original, hoy roto en el clon | `.github/workflows/deploy-main.yml` es una copia exacta (byte a byte) del workflow del repo original `micomercio-co/micomercio_bi_dashboard`. Verificado por la API pública de GitHub: la única ejecución en este clon (`Juanjorodriguez09/Bi_fabrica`, run `30845049803`, commit `97c9a24`) **falló en el paso "🚀 Deploy via Rsync"** — los secrets de Contabo no están configurados (o están mal) en este repo. Ver §3 |
 
@@ -270,23 +270,53 @@ Plugin reutilizable):
    el flujo completo (Issue → plan → aprobación → código → PR) corre solo
    de punta a punta por primera vez; solo el merge final sigue siendo, a
    propósito, 100% manual. Detalle completo en §4 gap 5b.
-5. **Conectar los 4 subagentes de revisión al flujo automático** —
-   probado *manualmente* sobre el PR #9 (workaround `general-purpose`,
-   ver §1 fila 8), no disparado solo todavía. Resultado del PR #9: sin
-   hallazgos de `validador-metricas` ni `documentador`; `revisor-codigo`
-   confirmó con evidencia (no solo "se ve bien") que el razonamiento
-   geométrico de la Routine sobre en qué breakpoint hacía falta el fix de
-   overflow fue correcto — **mergeado** (`d15d90c`, 2026-08-13). Falta que
-   esta revisión se dispare sola cuando la Routine abre el PR, en vez de
-   que un humano tenga que pedirla.
-6. **Agregar la notificación de estado** al final del ciclo de revisión,
+5. ~~**Conectar los 4 subagentes de revisión al flujo automático**~~ —
+   **hecho y confirmado en vivo** (`revisar-pr.yml`, 2026-08-14): dispara
+   solo con `pull_request: opened/synchronize` en ramas `claude/**`, corre
+   `revisor-codigo`/`validador-metricas`/`documentador` vía `Task` dentro
+   de un `claude-code-action`, publica un comentario consolidado marcando
+   cada hallazgo como REAL/CRÍTICO o COSMÉTICO/INFORMATIVO. `tester` queda
+   fuera (necesita servidor local). Probado sobre PR #9 (manual, con
+   workaround `general-purpose`) y PR #12 (100% automático, disparado por
+   `synchronize` — sin hallazgos reales, correctamente no disparó
+   corrección).
+6. ~~**Auto-corrección de hallazgos reales**~~ — **construida
+   (2026-08-14), decisión lógica confirmada en vivo, disparo real
+   pendiente de un caso que lo amerite.** Si `revisar-pr.yml` encuentra ≥1
+   hallazgo REAL/CRÍTICO y el PR tiene 1 solo commit (nunca corregido
+   automáticamente antes), dispara la Routine **"corregir-hallazgos-pr"**
+   (`trig_011GvjnLZDc14GW79UtQyYUS`) vía `/fire`, que corrige solo eso
+   sobre la MISMA rama (sin PR nuevo) — el push resultante re-dispara la
+   revisión (`synchronize`), pero el guard de "más de 1 commit" evita un
+   segundo ciclo automático. Límite: una sola corrección automática por
+   PR, después queda para juicio humano. En el PR #12 la lógica decidió
+   correctamente **no** disparar (el único hallazgo era cosmético) — falta
+   ver en vivo el camino contrario (si dispara bien cuando sí hay algo
+   real).
+7. **Agregar la notificación de estado** al final del ciclo de revisión,
    como comentario automático en el PR (más simple que integrar Slack/Teams
    para un primer MVP) — con el hallazgo de §4 gap #6, evaluar también usar
    la notificación push ya confirmada como canal complementario.
-7. **Solo después de que ese ciclo completo funcione una vez de punta a
-   punta *sin operación manual intermedia, incluida la revisión***,
-   extraer subagentes + skills hacia el Plugin reutilizable
-   (`Contexto_fabrica_software.md` §7) y probarlo en un segundo proyecto.
+8. **El merge sigue siendo, a propósito, 100% manual** — decisión
+   confirmada explícitamente con el usuario (2026-08-14), no solo por
+   inercia: es el único checkpoint humano que queda en todo el ciclo, y el
+   que va a importar de verdad el día que `deploy-main.yml` apunte a un
+   servidor real (mergear pasaría a disparar un deploy). No se reconsidera
+   hasta que el sistema demuestre varios ciclos estables.
+9. **Solo después de que ese ciclo completo funcione una vez de punta a
+   punta *sin operación manual intermedia, incluida la revisión y la
+   auto-corrección***, extraer subagentes + skills hacia el Plugin
+   reutilizable (`Contexto_fabrica_software.md` §7) y probarlo en un
+   segundo proyecto.
+
+**Dos bugs nuevos encontrados y corregidos el 2026-08-14** (documentados en
+detalle en `[[feedback_gotchas_tecnicos_fabrica]]`, memoria persistente):
+invocación de subagentes en segundo plano dentro de un job de un solo
+turno (Issue #10, éxito silencioso sin publicar nada), y permiso de
+`Read` bloqueado fuera del checkout del repo (PR #12, mismo síntoma). Los
+dos comparten un patrón: un job de CI "success" no garantiza que haya
+pasado algo real — verificar siempre el resultado, no solo la conclusión
+del workflow.
 
 Lo que queda fuera de esta ruta a propósito, porque ya está resuelto o no es
 bloqueante para el MVP: integración de Codex como revisor cruzado, y el
