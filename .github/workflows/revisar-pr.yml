@@ -67,6 +67,15 @@ jobs:
             NO invoques `tester` — no hay servidor local disponible en este entorno
             cloud, ese subagente no puede correr aquí.
 
+            IMPORTANTE sobre cómo invocar cada subagente: este es un job de GitHub
+            Actions de un solo turno, sin sesión interactiva después — NO existe un
+            "más tarde" en el que puedas continuar. Invoca cada subagente de forma
+            SÍNCRONA/bloqueante (NO en segundo plano, NO como tarea async) y espera
+            su resultado completo antes de seguir con el siguiente. Si lanzas alguno
+            en segundo plano y terminas tu turno esperando una notificación futura,
+            el job se completa igual sin publicar nada — ya pasó una vez con el
+            subagente planificador y es exactamente lo que no debes repetir.
+
             Cuando tengas los tres resultados, escribe UN solo comentario consolidado
             (más severo primero, con secciones claras por subagente) a un archivo
             temporal con la herramienta Write, y publícalo como comentario en este PR
