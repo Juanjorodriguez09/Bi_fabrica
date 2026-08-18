@@ -843,10 +843,10 @@ body.sidebar-collapsed .main-wrapper {
 }
 
 /* En el rango de 2 columnas de .summary-cards (481px-900px), las tarjetas
-   "Sesiones" y "Rebote" caen en la columna derecha de su fila y el tooltip
-   centrado se desborda por el borde derecho del viewport. Se ancla a la
-   derecha del ícono en vez de centrarlo para que crezca siempre hacia la
-   izquierda. */
+   "Sesiones", "Rebote" y "Pags/Sesion" caen en la columna derecha de su fila
+   y el tooltip centrado se desborda por el borde derecho del viewport. Se
+   ancla a la derecha del ícono en vez de centrarlo para que crezca siempre
+   hacia la izquierda. */
 @media (min-width: 481px) and (max-width: 900px) {
   .summary-card[data-metric="sessions"] .card-help-icon::after {
     left: auto;
@@ -859,15 +859,27 @@ body.sidebar-collapsed .main-wrapper {
     right: 0;
     transform: none;
   }
+
+  .summary-card[data-metric="pages-session"] .card-help-icon::after {
+    left: auto;
+    right: 0;
+    transform: none;
+  }
 }
 
-/* En el rango de 3 columnas de .summary-cards (901px-1400px), la tarjeta
-   "Visitantes" cae en la columna derecha (3ra de 3) por el mismo motivo que
-   "Sesiones" en el rango de 2 columnas: el tooltip centrado se desborda por
-   el borde derecho del viewport. Mismo ajuste: anclarlo a la derecha del
-   ícono para que crezca hacia la izquierda. */
+/* En el rango de 3 columnas de .summary-cards (901px-1400px), las tarjetas
+   "Visitantes" y "Pags/Sesion" caen en la columna derecha (3ra de 3) por el
+   mismo motivo que "Sesiones" en el rango de 2 columnas: el tooltip centrado
+   se desborda por el borde derecho del viewport. Mismo ajuste: anclarlo a la
+   derecha del ícono para que crezca hacia la izquierda. */
 @media (min-width: 901px) and (max-width: 1400px) {
   .summary-card[data-metric="visitors"] .card-help-icon::after {
+    left: auto;
+    right: 0;
+    transform: none;
+  }
+
+  .summary-card[data-metric="pages-session"] .card-help-icon::after {
     left: auto;
     right: 0;
     transform: none;
