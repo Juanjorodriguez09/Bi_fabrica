@@ -729,7 +729,7 @@
 
   function updateHeaderSiteBadge(domain) {
     if (!elements.headerSiteBadge) return;
-    elements.headerSiteBadge.innerHTML = domain ? `· ${domain}` : '';
+    elements.headerSiteBadge.textContent = domain ? `· ${domain}` : '';
   }
 
   // ============================================
