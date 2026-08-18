@@ -415,6 +415,13 @@ body.sidebar-collapsed .main-wrapper {
   color: var(--color-navy);
 }
 
+.header-site-badge {
+  margin-left: 6px;
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--color-gray-500, #6b7280);
+}
+
 .header-right {
   display: flex;
   align-items: center;

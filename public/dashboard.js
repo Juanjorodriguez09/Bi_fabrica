@@ -122,6 +122,7 @@
     btnCollapseSidebar: document.getElementById('btn-collapse-sidebar'),
     btnMenuMobile: document.getElementById('btn-menu-mobile'),
     headerTitle: document.getElementById('header-title'),
+    headerSiteBadge: document.getElementById('header-site-badge'),
     mainContent: document.getElementById('main-content'),
     // Filters
     siteSelect: document.getElementById('site-select'),
@@ -726,6 +727,11 @@
     }
   }
 
+  function updateHeaderSiteBadge(domain) {
+    if (!elements.headerSiteBadge) return;
+    elements.headerSiteBadge.textContent = domain ? `· ${domain}` : '';
+  }
+
   // ============================================
   // Data Loading
   // ============================================
@@ -741,6 +747,7 @@
       ).join('');
 
       state.siteId = sites[0].id;
+      updateHeaderSiteBadge(sites[0].domain);
       loadAllData();
       loadFilterOptions();
     } catch (error) {
@@ -2414,6 +2421,8 @@
     // Global filters
     elements.siteSelect?.addEventListener('change', (e) => {
       state.siteId = parseInt(e.target.value);
+      const siteName = elements.siteSelect.options[elements.siteSelect.selectedIndex]?.text || '';
+      updateHeaderSiteBadge(siteName);
       if (state.siteId) {
         loadFilterOptions();
         loadSectionData(state.currentSection);
