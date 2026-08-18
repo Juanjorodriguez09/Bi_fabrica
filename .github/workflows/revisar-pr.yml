@@ -40,8 +40,8 @@ jobs:
               }
             }
           prompt: |
-            Estás revisando el PR #${{ github.event.pull_request.number }} de este repo
-            (micomercio_bi_dashboard), rama `${{ github.head_ref }}` contra `main`,
+            Estás revisando el PR #${{ github.event.pull_request.number }} del repo
+            `${{ github.repository }}`, rama `${{ github.head_ref }}` contra `main`,
             título: "${{ github.event.pull_request.title }}". Este PR tiene
             ${{ github.event.pull_request.commits }} commit(s) hasta ahora.
 
@@ -96,7 +96,7 @@ jobs:
               corrección UNA sola vez, ejecutando exactamente:
 
               ```
-              curl -X POST "https://api.anthropic.com/v1/claude_code/routines/trig_011GvjnLZDc14GW79UtQyYUS/fire" \
+              curl -X POST "https://api.anthropic.com/v1/claude_code/routines/${{ vars.ROUTINE_CORREGIR_ID }}/fire" \
                 -H "Authorization: Bearer $FIX_PR_ROUTINE_API_TOKEN" \
                 -H "anthropic-beta: experimental-cc-routine-2026-04-01" \
                 -H "anthropic-version: 2023-06-01" \
