@@ -842,12 +842,19 @@ body.sidebar-collapsed .main-wrapper {
   visibility: visible;
 }
 
-/* En el rango de 2 columnas de .summary-cards (481px-900px), la tarjeta
-   "Sesiones" cae en la columna derecha y el tooltip centrado se desborda
-   por el borde derecho del viewport. Se ancla a la derecha del ícono en
-   vez de centrarlo para que crezca siempre hacia la izquierda. */
+/* En el rango de 2 columnas de .summary-cards (481px-900px), las tarjetas
+   "Sesiones" y "Rebote" caen en la columna derecha de su fila y el tooltip
+   centrado se desborda por el borde derecho del viewport. Se ancla a la
+   derecha del ícono en vez de centrarlo para que crezca siempre hacia la
+   izquierda. */
 @media (min-width: 481px) and (max-width: 900px) {
   .summary-card[data-metric="sessions"] .card-help-icon::after {
+    left: auto;
+    right: 0;
+    transform: none;
+  }
+
+  .summary-card[data-metric="bounce"] .card-help-icon::after {
     left: auto;
     right: 0;
     transform: none;
