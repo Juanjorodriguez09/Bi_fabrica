@@ -20,7 +20,7 @@
 | 6 | Desarrollo automatizado | 🟢 **Probado, ahora también vía Routine cloud** | El fix de XSS (`769d0f0`) se hizo con Claude Code local. Además, la Routine de prueba (§ paso 5) implementó el tooltip del Issue #5 de punta a punta en un entorno cloud (`micomercio-bi-dashboard-env`), sin intervención local — dos caminos probados: local manual, y cloud vía Routine |
 | 7 | Push al repositorio | 🟢 **Probado — patrón Routine → rama → PR confirmado** | La Routine de prueba creó la rama `claude/tooltip-sesiones`, commiteó, pusheó, y abrió el PR **#6** contra `main` sin mergear — exactamente el patrón decidido en `Contexto_fabrica_software.md` §3. El merge queda, a propósito, como paso manual separado |
 | 8 | Revisión automática por agentes | 🟢 **Construido, probado, y ahora 100% automático** | 4 subagentes en `.claude/agents/` (`tester` excluido de lo automático, necesita servidor local). `revisar-pr.yml` (2026-08-14) dispara solo con `pull_request: opened/synchronize` en ramas `claude/**`, corre los 3 restantes vía `Task`, publica comentario consolidado marcando cada hallazgo REAL/CRÍTICO vs COSMÉTICO/INFORMATIVO. Camino recorrido: manual en local (fix XSS) → manual con workaround `general-purpose` (PRs #6, #9, #12 — resolución por nombre de subagente sigue sin funcionar en esta sesión CLI local, causa raíz no confirmada) → 100% automático dentro de `claude-code-action` en GitHub Actions (PR #12, `synchronize`, sin workaround necesario ahí) |
-| 9 | Feedback y corrección | 🟢 **Probado en tres casos reales; auto-corrección construida** | `feedback.md` (XSS) y PR #6: `revisor-codigo` encontró un desborde real de CSS + 2 menores, corregidos con una segunda Routine manual, verificado con capturas, mergeado (`44582eb`). PR #9: sin hallazgos. PR #12: único hallazgo clasificado COSMÉTICO, sin corrección disparada (correcto). Desde 2026-08-14 existe además una Routine dedicada **"corregir-hallazgos-pr"** que `revisar-pr.yml` dispara sola cuando hay ≥1 hallazgo REAL/CRÍTICO (máx. 1 corrección automática por PR) — la lógica de "no disparar" ya se confirmó en vivo, la de "sí disparar" todavía no tuvo un caso real que la ejercite |
+| 9 | Feedback y corrección | 🟢 **Probado en cuatro casos reales; calibración del umbral de auto-corrección aclarada** | `feedback.md` (XSS) y PR #6: `revisor-codigo` encontró un desborde real de CSS + 2 menores, corregidos con una segunda Routine manual, verificado con capturas, mergeado (`44582eb`). PR #9: sin hallazgos. PR #12: único hallazgo clasificado COSMÉTICO, sin corrección disparada (correcto). **PR #13 (2026-08-18, prueba sintética deliberada):** se introdujo a propósito un bug real de seguridad (badge nuevo del header con `innerHTML` sin `escapeHtml`, inconsistente con el patrón ya usado para el mismo campo `domain`). `revisor-codigo` lo encontró y lo razonó bien — incluso detectó un segundo detalle no anticipado (`option.text` revierte el escape del DOM) — pero lo clasificó **"REAL, severidad moderada, no crítica"** (riesgo bajo real: `domain` lo carga un admin, no un visitante ni datos de tracking). Con esa etiqueta, la regla de disparo (`≥1 hallazgo REAL/CRÍTICO`) **no se activó** — 0 commits nuevos, sin segunda Routine. Corregido a mano (`textContent`) para cerrar el PR. **Conclusión:** el mecanismo de "no disparar" funciona correctamente incluso frente a un hallazgo real genuino, no solo frente a lo cosmético — el filtro es más fino de lo que parecía. Sigue sin validarse en vivo el camino donde SÍ dispara (necesita un hallazgo que el propio subagente etiquete "CRÍTICO", no solo "REAL") |
 | 10 | Notificación de estado (Slack/Teams/email/GitHub) | ⚪ No abordado | No hay integración con ningún canal de notificación en el repo ni en la config de subagentes |
 | — | Deploy a servidor tras push a `main` | 🔴 Heredado del repo original, hoy roto en el clon | `.github/workflows/deploy-main.yml` es una copia exacta (byte a byte) del workflow del repo original `micomercio-co/micomercio_bi_dashboard`. Verificado por la API pública de GitHub: la única ejecución en este clon (`Juanjorodriguez09/Bi_fabrica`, run `30845049803`, commit `97c9a24`) **falló en el paso "🚀 Deploy via Rsync"** — los secrets de Contabo no están configurados (o están mal) en este repo. Ver §3 |
 
@@ -222,6 +222,18 @@ el patrón al extraer el Plugin reutilizable:**
    acceso a Contabo que el usuario no tiene por ahora. No bloquea nada del
    resto; se retoma cuando haya acceso.
 
+**Aclarado (2026-08-18): el filtro `startsWith(github.head_ref, 'claude/')`
+en `revisar-pr.yml` es a propósito, no una limitación.** Mira la rama de
+*origen* del PR, no la de destino — así que usar `develop` u otro nombre
+como rama base no afecta nada. Pero un PR abierto desde una rama que un
+humano cree a mano (sin el prefijo `claude/`) hoy **no** dispara revisión
+ni auto-corrección — el filtro existe justamente para distinguir "esto lo
+generó la fábrica" de "esto lo tocó un humano directamente", ya que la
+Routine `implementar-plan-aprobado` siempre nombra sus ramas así por
+convención propia. Si algún día se quiere revisión automática también
+sobre ramas manuales, hay que ampliar esa condición a propósito — no es
+el comportamiento por defecto hoy.
+
 Los pasos 1–3 no dependen entre sí más que en orden lógico y se pueden
 construir esta semana sobre el mismo repo. Los pasos 4–5 son los que
 `Contexto_fabrica_software.md` ya marca como "no probado en vivo" — son de
@@ -281,18 +293,21 @@ Plugin reutilizable):
    `synchronize` — sin hallazgos reales, correctamente no disparó
    corrección).
 6. ~~**Auto-corrección de hallazgos reales**~~ — **construida
-   (2026-08-14), decisión lógica confirmada en vivo, disparo real
-   pendiente de un caso que lo amerite.** Si `revisar-pr.yml` encuentra ≥1
-   hallazgo REAL/CRÍTICO y el PR tiene 1 solo commit (nunca corregido
-   automáticamente antes), dispara la Routine **"corregir-hallazgos-pr"**
-   (`trig_011GvjnLZDc14GW79UtQyYUS`) vía `/fire`, que corrige solo eso
-   sobre la MISMA rama (sin PR nuevo) — el push resultante re-dispara la
-   revisión (`synchronize`), pero el guard de "más de 1 commit" evita un
-   segundo ciclo automático. Límite: una sola corrección automática por
-   PR, después queda para juicio humano. En el PR #12 la lógica decidió
-   correctamente **no** disparar (el único hallazgo era cosmético) — falta
-   ver en vivo el camino contrario (si dispara bien cuando sí hay algo
-   real).
+   (2026-08-14), lógica de "no disparar" confirmada en vivo dos veces
+   (PR #12: cosmético; PR #13: real-pero-moderado), disparo real
+   pendiente de un caso CRÍTICO que lo amerite.** Si `revisar-pr.yml`
+   encuentra ≥1 hallazgo REAL/CRÍTICO y el PR tiene 1 solo commit (nunca
+   corregido automáticamente antes), dispara la Routine
+   **"corregir-hallazgos-pr"** (`trig_011GvjnLZDc14GW79UtQyYUS`) vía
+   `/fire`, que corrige solo eso sobre la MISMA rama (sin PR nuevo) — el
+   push resultante re-dispara la revisión (`synchronize`), pero el guard
+   de "más de 1 commit" evita un segundo ciclo automático. Límite: una
+   sola corrección automática por PR, después queda para juicio humano.
+   **Decisión explícita (2026-08-18):** dejar el umbral tal cual está —
+   exigir "CRÍTICO" y no solo "REAL" es comportamiento conservador
+   correcto, no un bug: evita que la fábrica reescriba código sola por
+   hallazgos de bajo riesgo real que un humano puede simplemente leer y
+   decidir. Ver PR #13 en fila 9 de §1 para el caso que confirmó esto.
 7. **Agregar la notificación de estado** al final del ciclo de revisión,
    como comentario automático en el PR (más simple que integrar Slack/Teams
    para un primer MVP) — con el hallazgo de §4 gap #6, evaluar también usar
@@ -303,11 +318,13 @@ Plugin reutilizable):
    que va a importar de verdad el día que `deploy-main.yml` apunte a un
    servidor real (mergear pasaría a disparar un deploy). No se reconsidera
    hasta que el sistema demuestre varios ciclos estables.
-9. **Solo después de que ese ciclo completo funcione una vez de punta a
-   punta *sin operación manual intermedia, incluida la revisión y la
-   auto-corrección***, extraer subagentes + skills hacia el Plugin
-   reutilizable (`Contexto_fabrica_software.md` §7) y probarlo en un
-   segundo proyecto.
+9. **Condición cumplida (2026-08-18) → foco actual.** El ciclo completo
+   corrió de punta a punta sin operación manual intermedia (Issue #8→PR#9),
+   la revisión automática corrió sola sobre PRs reales (#9, #12, #13), y la
+   lógica de auto-corrección se probó y calibró en ambos sentidos posibles
+   hasta ahora (no dispara ante cosmético ni ante real-moderado — falta
+   solo el caso crítico). Con eso, arranca la extracción hacia un estándar
+   reutilizable — ver §6.
 
 **Dos bugs nuevos encontrados y corregidos el 2026-08-14** (documentados en
 detalle en `[[feedback_gotchas_tecnicos_fabrica]]`, memoria persistente):
@@ -322,3 +339,59 @@ Lo que queda fuera de esta ruta a propósito, porque ya está resuelto o no es
 bloqueante para el MVP: integración de Codex como revisor cruzado, y el
 reparto fino entre cron/n8n vs. Routines — ambos siguen abiertos en
 `Contexto_fabrica_software.md` §6 pero no impiden avanzar en lo de arriba.
+
+## 6. Hacia el estándar reutilizable (aplicable a otros proyectos)
+
+Todo lo construido hasta acá funciona, pero está **anclado a este repo
+específico**: nombres de repo, IDs de environment y de Routines quedaron
+escritos a mano en los workflows y en la config de las Routines. Llevarlo a
+un segundo proyecto hoy significa copiar cada archivo y editarlo a mano,
+no "instalar un estándar".
+
+### 6.1 Inventario: qué es genérico ya, qué es específico de este repo
+
+| Pieza | Hoy | Para ser reutilizable |
+|---|---|---|
+| `.github/ISSUE_TEMPLATE/solicitud-cambio.yml` | Genérico, sin nombres de repo | Copiar tal cual a cualquier proyecto nuevo |
+| `.claude/agents/planificador.md` | Genérico — lee `CLAUDE.md` del repo donde corre, no asume nada de este dashboard | Copiar tal cual |
+| `.claude/agents/revisor-codigo.md` | Genérico — revisión ISO/IEC 25010 sobre el diff | Copiar tal cual |
+| `.claude/agents/documentador.md` | Genérico en estructura, pero referencia `DOCUMENTACION_TECNICA.md` por nombre | Copiar, pero el proyecto destino necesita un doc técnico equivalente (o ajustar el nombre) |
+| `.claude/agents/validador-metricas.md` | **Específico de este repo** — conoce `dashboard.service.js`, cálculos de KPIs concretos | No se reutiliza tal cual; es el ejemplo de "subagente de dominio" que cada proyecto necesita escribir a medida, o simplemente omitir si no aplica |
+| `.claude/agents/tester.md` | Genérico en intención, pero deshabilitado en todo el flujo automático (necesita servidor local, no disponible en cloud) | Copiar; decidir por proyecto si tiene sentido activarlo en algún punto |
+| `generar-plan.yml` | Genérico — ninguna referencia a este repo en el YAML | Copiar tal cual |
+| `disparar-routine.yml` | **Tiene hardcodeado** el `trigger_id` de la Routine `implementar-plan-aprobado` en la URL del `curl` | Mover el ID a un secret o variable de repo (`vars.ROUTINE_IMPLEMENTAR_ID`) en vez de texto fijo en el YAML — así el archivo es idéntico en cualquier proyecto |
+| `revisar-pr.yml` | **Tiene hardcodeado** el `trigger_id` de `corregir-hallazgos-pr` en el prompt | Mismo tratamiento: mover a variable de repo |
+| Routine `implementar-plan-aprobado` | **Prompt genérico** (ya no tiene tarea hardcodeada, lee el Issue del payload), pero `session_context.sources.git_repository.url` y `environment_id` son específicos de este repo | Cada proyecto crea su propia copia de la Routine apuntando a su propio repo/environment — el *prompt* se reutiliza copiando el texto, no hay forma de "compartir" una Routine entre repos |
+| Routine `corregir-hallazgos-pr` | Igual que la anterior | Igual que la anterior |
+| `deploy-main.yml` | Específico de este proyecto (rsync a Contabo) | No es parte del estándar de la fábrica — cada proyecto tiene su propio deploy o ninguno |
+
+### 6.2 Qué falta construir para tener un estándar real
+
+1. **Parametrizar los dos workflows con trigger IDs hardcodeados**
+   (`disparar-routine.yml`, `revisar-pr.yml`) para leer esos IDs de
+   variables de repo (`vars.*`) en vez de tenerlos escritos en el YAML.
+   Esto es lo único que hace que los workflows dejen de ser "copiar y
+   editar" y pasen a ser "copiar tal cual, configurar variables".
+2. **Checklist de onboarding de un proyecto nuevo** — hoy ese conocimiento
+   vive repartido entre este roadmap y la memoria de Claude Code, no en un
+   documento que otra persona (o yo, en otra sesión) pueda seguir sin
+   re-derivar todo. Debe cubrir, en orden: instalar la GitHub App "Claude
+   Code" (scope solo al repo), crear la label `solicitud`, crear un
+   environment CCR para el proyecto, crear las dos Routines genéricas
+   apuntando a ese environment/repo, generar y guardar sus tokens de
+   disparo (`ROUTINE_API_TOKEN`, `FIX_PR_ROUTINE_API_TOKEN`) y los IDs como
+   `vars` de repo, confirmar que el proyecto tiene un `CLAUDE.md` con
+   convenciones reales (los subagentes genéricos dependen de que exista y
+   esté actualizado).
+3. **Decidir qué hacer con el subagente de dominio** (`validador-metricas`
+   en este proyecto) — cada proyecto nuevo probablemente necesita el suyo
+   propio (o ninguno). El estándar debe dejar claro que ese subagente es
+   *opcional y a medida*, no parte del paquete base.
+4. **Probarlo en un segundo proyecto real** — es la única forma de
+   confirmar que el estándar realmente generaliza y no quedaron supuestos
+   implícitos de este repo. Candidato natural: algún otro repo de
+   MiComercio con `CLAUDE.md` ya escrito.
+
+No se construye automáticamente por sí solo — es trabajo nuevo, deliberado,
+distinto de "documentar lo que ya existe". Queda como el siguiente bloque
+de trabajo después de cerrar la documentación de hoy.
