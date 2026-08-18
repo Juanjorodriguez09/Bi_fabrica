@@ -80,6 +80,39 @@ En orden — cada paso depende del anterior:
    que se hizo acá con el tooltip de "Rebote" después de parametrizar los
    workflows.
 
+## 3.1 Si el proyecto nuevo está en otra cuenta/organización de GitHub
+
+El checklist de arriba es el mismo, sin ningún paso extra — nada en él
+asume que el repo está en esta cuenta (`Juanjorodriguez09`). Tres cosas
+para tener claras antes de asumir que "simplemente funciona":
+
+- **Los secrets y variables de un repo nunca se copian solos a otro repo**,
+  ni siquiera si es la misma persona dueña de ambos — es una regla de
+  GitHub, no de la fábrica (ya se confirmó esto mismo con
+  `deploy-main.yml` al clonar este repo, ver
+  `[[feedback_gotchas_tecnicos_fabrica]]`). Cada repo nuevo necesita sus
+  propios secrets/variables creados a mano (pasos 3, 6, 7).
+- **`CLAUDE_CODE_OAUTH_TOKEN` no depende de la cuenta de GitHub** — es un
+  token de la cuenta/suscripción de Claude Code, no de GitHub. Si el
+  proyecto nuevo lo maneja la misma persona con la misma suscripción,
+  técnicamente se puede reutilizar el mismo valor de token como secret en
+  el repo nuevo, sin generar uno distinto (aunque generar uno nuevo por
+  proyecto también es válido y más fácil de rotar/revocar por separado).
+- **El `environment_id` y las Routines si están atados a un repo
+  específico** (`session_context.sources.git_repository.url`) — no se
+  "mueven" a otra cuenta, se crean de cero apuntando al repo nuevo. El
+  checklist ya lo dice como "crear las Routines" (paso 5), no como
+  "reusar" — por diseño, esto ya cubre el caso de cambiar de cuenta igual
+  que el caso de un repo nuevo en la misma cuenta, sin diferencia.
+
+**Importante — esto está razonado y confirmado por inspección del código,
+no probado en vivo todavía con una cuenta de GitHub distinta.** La única
+prueba real que existe hoy es "proyecto nuevo, misma cuenta" (este mismo
+repo, cuando se creó). Antes de decir con total seguridad "cambiar de
+cuenta no rompe nada", falta ejecutar el checklist una vez de punta a
+punta en una cuenta distinta — ver §5 y el pendiente en
+`Roadmap_automatizacion_fabrica.md` §6.2.
+
 ## 4. Qué NO es parte de este estándar (a propósito)
 
 - **El deploy a servidor** (`deploy-main.yml` en este repo) — cada
