@@ -367,11 +367,19 @@ no "instalar un estándar".
 
 ### 6.2 Qué falta construir para tener un estándar real
 
-1. **Parametrizar los dos workflows con trigger IDs hardcodeados**
-   (`disparar-routine.yml`, `revisar-pr.yml`) para leer esos IDs de
-   variables de repo (`vars.*`) en vez de tenerlos escritos en el YAML.
-   Esto es lo único que hace que los workflows dejen de ser "copiar y
-   editar" y pasen a ser "copiar tal cual, configurar variables".
+1. ~~**Parametrizar los dos workflows con trigger IDs hardcodeados**~~ —
+   **hecho y confirmado en vivo (2026-08-18).** `disparar-routine.yml` y
+   `revisar-pr.yml` ahora leen `vars.ROUTINE_IMPLEMENTAR_ID` /
+   `vars.ROUTINE_CORREGIR_ID` en vez de tener los IDs escritos en el YAML;
+   también se reemplazó el nombre del repo hardcodeado en los prompts por
+   `${{ github.repository }}`. **Ciclo completo re-probado después del
+   cambio, de punta a punta, sin ningún ajuste adicional:** Issue #14
+   (tooltip "Rebote") → plan → `/aprobar` → Routine (leyendo la variable
+   nueva) → PR #15 → revisión automática limpia → merge → `git pull` local
+   → **confirmado visualmente en el navegador**, tooltip funcionando. La
+   parametrización no cambió el comportamiento, solo de dónde salen los
+   IDs — que es exactamente lo que hace que estos dos archivos ahora se
+   puedan copiar a otro proyecto sin editar una sola línea.
 2. **Checklist de onboarding de un proyecto nuevo** — hoy ese conocimiento
    vive repartido entre este roadmap y la memoria de Claude Code, no en un
    documento que otra persona (o yo, en otra sesión) pueda seguir sin
