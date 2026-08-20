@@ -36,7 +36,7 @@ jobs:
           settings: |
             {
               "permissions": {
-                "allow": ["Bash(gh pr comment *)", "Bash(curl *)"]
+                "allow": ["Bash(gh pr comment *)", "Bash(curl *)", "Write"]
               }
             }
           prompt: |
@@ -65,6 +65,16 @@ jobs:
 
             NO invoques `tester` — no hay servidor local disponible en este entorno
             cloud.
+
+            IMPORTANTE — no intentes verificar nada corriendo servicios: este entorno
+            de GitHub Actions NO tiene Docker, Postgres, ni el servidor de la app
+            corriendo, y nunca los va a tener. NO intentes `docker compose up`, `psql`,
+            levantar el servidor, ni ningún comando para "probar" el cambio en
+            ejecución — ninguno de esos comandos está autorizado y vas a perder tiempo
+            del job entero chocando contra el muro de aprobación sin que nadie pueda
+            aprobarlo. Tu única fuente de verdad es la lectura estática del código en
+            pr-diff.txt y el resto del checkout — toda la revisión se hace por lectura,
+            nunca por ejecución.
 
             IMPORTANTE sobre cómo invocar cada subagente: este es un job de GitHub
             Actions de un solo turno, sin sesión interactiva después — NO existe un

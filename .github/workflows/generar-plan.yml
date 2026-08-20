@@ -26,7 +26,7 @@ jobs:
           settings: |
             {
               "permissions": {
-                "allow": ["Bash(gh issue comment *)"]
+                "allow": ["Bash(gh issue comment *)", "Write"]
               }
             }
           prompt: |
