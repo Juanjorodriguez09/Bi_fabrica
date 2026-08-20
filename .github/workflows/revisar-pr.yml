@@ -109,6 +109,13 @@ jobs:
             no está completa hasta que el comentario de revisión quede publicado (y,
             si aplica según la regla de arriba, la corrección disparada).
 
+            CRÍTICO: ejecutá `gh pr comment` **exactamente una sola vez, con el
+            comentario consolidado completo ya terminado**. No lo uses para probar, ni
+            para publicar un borrador corto antes del definitivo — cada ejecución
+            publica un comentario real y visible en el PR, no hay forma de "probar en
+            seco". Si el comentario es largo, igual va completo en un solo
+            `--body-file`, nunca partido en varias llamadas.
+
             NO escribas código, NO corrijas nada tú mismo, NO abras otra rama ni PR —
             tu única salida es el comentario de revisión y, cuando corresponda, el
             disparo de la Routine de corrección.

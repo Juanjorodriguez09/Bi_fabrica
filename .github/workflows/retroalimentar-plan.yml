@@ -100,3 +100,11 @@ jobs:
 
             Ningún otro comando de Bash está autorizado y quedará bloqueado — no lo intentes. La
             tarea no está completa hasta que el comentario quede publicado.
+
+            CRÍTICO: ejecutá `gh issue comment` **exactamente una sola vez, con el plan
+            actualizado completo ya terminado**. No lo uses para probar, para verificar que el
+            comando funciona, ni para publicar un borrador corto antes del definitivo — cada
+            ejecución publica un comentario real y visible, no hay forma de "probar en seco". Si
+            el plan es largo, igual va completo en un solo `--body-file`, nunca partido en varias
+            llamadas. Escribí el archivo completo con Write, revisalo vos mismo antes, y recién
+            ahí ejecutá el comando una única vez.
