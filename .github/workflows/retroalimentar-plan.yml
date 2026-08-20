@@ -1,0 +1,102 @@
+name: Retroalimentar plan antes de aprobar
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: write
+  id-token: write
+
+jobs:
+  retroalimentar_plan:
+    if: >
+      github.event.issue.pull_request == null &&
+      github.event.comment.user.type != 'Bot' &&
+      contains(fromJSON('["OWNER","COLLABORATOR","MEMBER"]'), github.event.comment.author_association) &&
+      !startsWith(github.event.comment.body, '/aprobar')
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🚚 Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Verificar label "solicitud"
+        id: check
+        run: |
+          HAS_LABEL=$(jq -r '.issue.labels | map(.name == "solicitud") | any' "$GITHUB_EVENT_PATH")
+          echo "has_label=$HAS_LABEL" >> "$GITHUB_OUTPUT"
+
+      - name: Traer el hilo completo del Issue (cuerpo + todos los comentarios)
+        if: steps.check.outputs.has_label == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue view ${{ github.event.issue.number }} --repo ${{ github.repository }} \
+            --json title,body,comments > issue-thread.json
+          echo "Comentarios en el hilo: $(jq '.comments | length' issue-thread.json)"
+
+      - name: Verificar que todavía no se aprobó
+        id: approved_check
+        if: steps.check.outputs.has_label == 'true'
+        run: |
+          ALREADY_APPROVED=$(jq -r '[.comments[].body] | map(startswith("/aprobar")) | any' issue-thread.json)
+          echo "already_approved=$ALREADY_APPROVED" >> "$GITHUB_OUTPUT"
+
+      - name: 🔁 Replanificar con el ajuste del humano
+        if: steps.check.outputs.has_label == 'true' && steps.approved_check.outputs.already_approved == 'false'
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          show_full_output: true
+          settings: |
+            {
+              "permissions": {
+                "allow": ["Bash(gh issue comment *)"]
+              }
+            }
+          prompt: |
+            Estás retroalimentando el plan de desarrollo del Issue #${{ github.event.issue.number }}
+            de este repo (${{ github.repository }}). Ya existe un plan anterior, generado por el
+            subagente planificador, comentado en este mismo Issue — y un humano acaba de dejar un
+            comentario nuevo con un ajuste, pregunta o corrección sobre ese plan.
+
+            El hilo completo (título, cuerpo original del Issue, y TODOS los comentarios en orden
+            cronológico — incluido el plan anterior y el comentario de ajuste más reciente) ya está
+            en el archivo issue-thread.json, en la raíz de este checkout — léelo con la herramienta
+            Read. NO ejecutes `gh issue view`, `git`, ni ningún otro comando para volver a
+            consultarlo, ya lo tenés completo ahí.
+
+            Usa el subagente planificador definido en .claude/agents/planificador.md para generar
+            una versión ACTUALIZADA del plan de desarrollo, siguiendo su mismo formato de salida de
+            siempre (Objetivo, Alcance, Contexto, Archivos a tocar, Restricciones de calidad,
+            Criterio de validación, Preguntas abiertas si aplica). La actualización debe partir del
+            plan anterior (no lo reescribas desde cero si no hace falta) e incorporar explícitamente
+            el ajuste que acaba de pedir el humano en su comentario más reciente del hilo. Si el
+            comentario del humano es en realidad una pregunta o no aporta un ajuste real al plan,
+            respondé eso mismo con claridad en el nuevo comentario, sin inventar un cambio que no
+            pidieron.
+
+            IMPORTANTE sobre cómo invocar al subagente: este es un job de GitHub Actions de un solo
+            turno, sin sesión interactiva después. Invocalo de forma SÍNCRONA/bloqueante (NO en
+            segundo plano, NO como tarea async) y esperá su resultado completo antes de seguir.
+
+            Antes de replanificar, leé CLAUDE.md y los skills relevantes en .claude/skills/, tal
+            como indica el subagente planificador.
+
+            NO escribas ni modifiques código. NO abras rama ni Pull Request. NO decidas vos si el
+            plan queda aprobado — esa decisión es exclusivamente del humano, comentando `/aprobar`
+            en un comentario aparte.
+
+            Cuando tengas el plan actualizado, tu ÚLTIMO paso obligatorio es publicarlo como un
+            NUEVO comentario en este Issue (no reemplaza al anterior, queda como historial de la
+            conversación) con exactamente:
+
+            ```
+            gh issue comment ${{ github.event.issue.number }} --body-file <ruta-a-un-archivo-temporal-con-el-plan>
+            ```
+
+            Ningún otro comando de Bash está autorizado y quedará bloqueado — no lo intentes. La
+            tarea no está completa hasta que el comentario quede publicado.
