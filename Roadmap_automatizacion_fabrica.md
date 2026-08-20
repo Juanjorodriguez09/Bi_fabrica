@@ -221,6 +221,17 @@ el patrón al extraer el Plugin reutilizable:**
 7. **Corregir y renombrar el deploy heredado** (§3) — **en espera**: requiere
    acceso a Contabo que el usuario no tiene por ahora. No bloquea nada del
    resto; se retoma cuando haya acceso.
+8. **Crear Issues desde afuera de GitHub** (2026-08-20, pendiente, no
+   iniciado) — el usuario quiere poder disparar una solicitud desde otro
+   lado (formulario, webhook, eventualmente WhatsApp) sin que quien pide
+   el cambio tenga que tocar GitHub directamente. Camino recomendado: un
+   flujo de n8n (ya lo usa en otro proyecto) con el nodo nativo de GitHub
+   "Create Issue" — sin herramienta nueva que aprender. Alternativa más
+   liviana si el equipo termina usando Slack: la app oficial gratuita de
+   GitHub↔Slack (no verificada en detalle todavía, no confundir con
+   Claude Tag — son cosas distintas, Claude Tag si requiere plan
+   Team/Enterprise, esto no). Explícitamente en espera hasta terminar de
+   probar el loop de retroalimentación del plan (punto 9 más abajo).
 
 **Aclarado (2026-08-18): el filtro `startsWith(github.head_ref, 'claude/')`
 en `revisar-pr.yml` es a propósito, no una limitación.** Mira la rama de
