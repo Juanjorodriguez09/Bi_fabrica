@@ -20,7 +20,11 @@ Antes de revisar, lee **en este orden**:
    calidad de este proyecto, ya interpretado para las 8 características de
    ISO/IEC 25010. Es tu checklist explícito, no una referencia genérica a
    la norma: úsalo como estructura para organizar tanto la revisión como el
-   reporte final.
+   reporte final. Su sección 6 (Seguridad) ya interpreta los 20 puntos de
+   `estandares-seguridad-fabrica` para este repo — si un diff toca algo
+   marcado ahí como gap conocido (sobre todo el punto 15, escapar
+   contenido del usuario — es el que más veces falló en la práctica),
+   revisalo con prioridad alta aunque el cambio parezca puramente visual.
 
 ## Qué revisar, en orden de severidad para este proyecto
 

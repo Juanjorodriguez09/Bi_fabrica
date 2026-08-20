@@ -27,6 +27,7 @@ vez) → **el merge final sigue siendo, siempre, una decisión 100% manual**.
 | `.claude/agents/revisor-codigo.md` | Este repo |
 | `.claude/agents/documentador.md` | Este repo (el proyecto destino necesita un doc técnico equivalente a `DOCUMENTACION_TECNICA.md`, o ajustar el nombre dentro del subagente) |
 | `.claude/agents/tester.md` | Este repo (queda definido pero fuera del flujo automático, igual que acá) |
+| `.claude/skills/estandares-seguridad-fabrica/SKILL.md` | Este repo — genérico a propósito, no menciona nada de este dashboard. Cada proyecto nuevo lo interpreta una vez en su propio skill de calidad (marcando aplica/no aplica/gap por punto), como se hizo acá en `modelo-calidad-iso25010` §6 |
 
 ## 2. Qué hay que adaptar o escribir a medida
 

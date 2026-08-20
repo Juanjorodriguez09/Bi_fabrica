@@ -88,22 +88,35 @@ menos.
 
 ## 6. Seguridad
 
-- **Aislamiento multi-tenant por `site_id`:** la protección de seguridad
-  más importante de este proyecto — evita que un cliente vea datos de
-  otro. Cualquier query nueva que no lo respete es un hallazgo crítico.
-- **SQL parametrizado:** todo `$queryRaw` usa template tag, nunca
-  `$queryRawUnsafe` — sin inyección SQL conocida.
-- **Ausencia de autenticación en este repo:** las rutas del dashboard no
-  tienen ningún control de acceso propio — la documentación técnica asume
-  un middleware "upstream" que no vive en este código. Esto es un riesgo
-  real y explícito: si ese middleware upstream falla o no está bien
-  configurado en un entorno dado, cualquiera con la URL ve datos agregados
-  de todos los clientes de MiComercio. No es algo que este repo deba
-  resolver por sí solo, pero sí algo que debe quedar señalado como
-  supuesto de seguridad externo, no como "ya resuelto".
-- `.env` con credenciales está en `.gitignore` — no se ha filtrado ninguna
-  credencial en el historial de este repo (verificado en la Fase 1).
-- Sin rate limiting en las rutas de lectura del dashboard.
+Interpretación de los 20 puntos de `estandares-seguridad-fabrica` (el
+estándar genérico de la fábrica) aplicados a este repo concreto:
+
+| # | Punto | Estado en este repo |
+|---|---|---|
+| 1 | Oculta claves API | ✅ Todo por `.env`/variables de entorno, sin valores hardcodeados. |
+| 2 | Elimina secretos de Git | ✅ `.env` en `.gitignore`, sin credenciales filtradas en el historial (verificado en Fase 1). |
+| 3 | Clave de DB con privilegio mínimo | ⚠️ **Gap:** no hay evidencia en este repo de qué rol de Postgres usa `DATABASE_URL` en producción — verificar que no sea el rol de máximo privilegio de Supabase. |
+| 4 | RLS | **No aplica tal cual** — este repo no accede vía la capa de Supabase (PostgREST/RLS), es Postgres directo vía Prisma (ver skill `entorno-seguro`). El control de acceso equivalente es el filtro explícito por `site_id` en cada query (ver aislamiento multi-tenant abajo) — ese es el mecanismo real, no RLS. |
+| 5 | Cifra datos sensibles | ⚠️ **Gap sin evaluar:** `session`/`visitor` guardan IP y geolocalización derivada — es dato potencialmente sensible (PII) y no está documentado si va cifrado en reposo o solo protegido por aislamiento de acceso. Señalar en cualquier cambio que toque esas columnas. |
+| 6 | Fuerza autenticación del servidor | **No aplica a este repo por diseño** — la autenticación es upstream, fuera de este código (ver `CLAUDE.md`). Riesgo real y explícito, ya documentado: si el middleware upstream falla, cualquiera con la URL ve datos agregados. No es responsabilidad de este repo resolverlo, pero sí señalarlo, nunca asumirlo "ya resuelto". |
+| 7 | Restringe acceso a registros | ✅ **La protección más importante de este proyecto:** aislamiento multi-tenant por `site_id` en cada query — directa o vía `session_id`/`visitor_id` ya filtrados. Cualquier query nueva que no lo respete es un hallazgo crítico. |
+| 8 | Bloquea manipulación de campos | ✅ Los filtros avanzados (`device`, `browser`, `country`, etc.) son parámetros de consulta interpretados explícitamente por el service, no un objeto pasado directo a una escritura — no hay mass assignment porque este repo no escribe datos de negocio (es solo lectura). |
+| 9 | Protege cookies de sesión | **No aplica** — sin sesión propia en este repo. |
+| 10 | Hashea contraseñas | **No aplica** — sin manejo de contraseñas en este repo. |
+| 11 | Limita intentos de login | **No aplica** — sin login en este repo. |
+| 12 | Protección contra bots | ⚠️ **Gap:** las rutas de lectura son públicas (sujeto al punto 6) y no tienen ninguna verificación anti-bot — relacionado con la ausencia de rate limiting ya conocida. |
+| 13 | Monitorea consultas de DB | ❌ **Gap confirmado, deuda conocida:** sin logging ni alertas sobre queries lentas o anómalas. |
+| 14 | Valida todas las entradas | ⚠️ Parcial — `siteId` se valida (400 si falta), pero no hay validación sistemática de tipo/formato en el resto de query params (fechas, filtros). Señalar si un cambio nuevo confía en un input sin validarlo. |
+| 15 | Escapa contenido del usuario | ⚠️ **Gap real, con historial:** el patrón `escapeHtml()` existe y se usa en la mayoría del frontend, pero se encontraron y corrigieron dos casos reales donde un `innerHTML` nuevo lo omitió (badge del header, tooltip de sitio) — ver `Roadmap_automatizacion_fabrica.md`. Es el punto de mayor riesgo real de este repo en la práctica: cualquier `innerHTML` nuevo en `dashboard.js` que no pase por `escapeHtml()` es un hallazgo, sin excepción. |
+| 16 | Restringe subida de archivos | **No aplica** — sin funcionalidad de subida de archivos en este repo. |
+| 17 | Limita respuestas de API | ❌ **Gap confirmado, deuda conocida:** sin rate limiting en las rutas de lectura del dashboard (a diferencia del servicio de ingesta, que sí lo tiene). Paginación existe en endpoints de listado (`getTopPages`, etc. con `limit`), pero no hay tope duro contra un `limit` arbitrariamente alto pedido por el cliente. |
+| 18 | Cabeceras de seguridad HTTP | ❌ **Gap sin evaluar todavía** — no hay evidencia en el código de `helmet` o configuración explícita de CSP/`X-Frame-Options` en `app.js`. |
+| 19 | Fuerza HTTPS | Responsabilidad del proxy/deploy (Contabo + reverse proxy), no de este código — verificar en el workflow de deploy cuando se corrija (`deploy-main.yml`, ver roadmap §3), no asumir. |
+| 20 | Escanea dependencias | ❌ **Gap confirmado, deuda conocida:** sin Dependabot ni `npm audit` en CI. |
+
+**SQL parametrizado** (no es uno de los 20 puntos genéricos, pero es la
+protección de inyección más relevante de este stack): todo `$queryRaw` usa
+template tag, nunca `$queryRawUnsafe` — sin inyección SQL conocida.
 
 ## 7. Mantenibilidad
 
