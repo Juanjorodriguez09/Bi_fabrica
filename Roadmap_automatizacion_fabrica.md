@@ -414,3 +414,60 @@ no "instalar un estándar".
 No se construye automáticamente por sí solo — es trabajo nuevo, deliberado,
 distinto de "documentar lo que ya existe". Queda como el siguiente bloque
 de trabajo después de cerrar la documentación de hoy.
+
+## 7. Sesión 2026-08-20 — Issue más conversacional + loop de retroalimentación
+
+Se analizó una propuesta de arquitectura (orquestador propio + máquina de
+estados + agente cruzado) generada con otra IA a partir de una reunión con
+el jefe del usuario. Decisión, no descartar pero postergar: el orquestador
+propio y el revisor cruzado con Codex quedan anotados como pendientes de
+mediano plazo (Codex ya estaba anotado desde antes en
+`Contexto_fabrica_software.md` §2 — no es una idea nueva). Lo que se
+construyó hoy, en cambio, ataca directo dos pain points concretos que sí
+se decidió resolver ahora:
+
+- ~~**Issue más simple**~~ — **hecho.** `solicitud-cambio.yml` ahora solo
+  exige el campo "Objetivo"; el resto (Alcance, Contexto, Restricciones,
+  Criterio de validación, Salida esperada) pasó a opcional. Probado en
+  vivo: Issue #19 (tooltip "Pageviews") se abrió con un solo campo lleno y
+  el planificador igual generó un plan completo, investigando el resto.
+- ~~**Loop de retroalimentación del plan antes de aprobar**~~ — **hecho y
+  probado en vivo.** Nuevo workflow `retroalimentar-plan.yml`: cualquier
+  comentario humano que no sea `/aprobar`, en un Issue con label
+  `solicitud` que todavía no fue aprobado, dispara una replanificación —
+  el planificador relee el hilo completo (plan anterior + el ajuste) y
+  publica una versión actualizada. Confirmado en el Issue #19: el usuario
+  pidió consistencia de redacción con los otros tooltips, el plan
+  actualizado la incorporó palabra por palabra. El guard de "ya
+  aprobado" también se validó sin querer: un comentario posterior de la
+  Routine (no-bot, cuenta del usuario) no disparó una replanificación
+  espuria porque ya existía un `/aprobar` en el hilo.
+
+**Dos bugs nuevos encontrados y corregidos en el camino (mismo día):**
+
+1. **`gh issue comment`/`gh pr comment` usado más de una vez por corrida**
+   — al autorizarlo por `settings` sin decir "una sola vez", Claude lo usó
+   para probar (comentario corto de prueba) y después partió el resultado
+   real en varios comentarios. Corregido con una instrucción explícita en
+   los tres workflows que publican comentarios.
+2. **`Write` sin autorizar en `revisar-pr.yml` + intentos de levantar
+   servicios locales** — en el PR #20 (tooltip "Pageviews", el primero
+   con un hallazgo real de contenido, no solo estructura), Claude intentó
+   levantar Docker/Postgres/psql para verificar el dato real, chocó ~4
+   minutos contra el muro de aprobación de Bash, y al final el propio
+   `Write` del comentario consolidado también quedó pidiendo aprobación
+   — el job terminó "success" sin publicar nada, con el hallazgo real
+   (tooltip impreciso, no contemplaba el filtro por sesión) ya escrito
+   pero nunca publicado. Diagnosticado con los logs completos que el
+   usuario bajó y compartió a mano (esta sesión no tiene credenciales
+   para bajarlos por API). Corregido: `Write` autorizado explícitamente
+   en los tres workflows, y prohibición explícita de intentar ejecutar
+   servicios en `revisar-pr.yml` — la revisión es 100% por lectura
+   estática. El PR #20 ya se había mergeado antes de este diagnóstico; el
+   hallazgo real (tooltip de "Pageviews" impreciso) se corrigió aparte,
+   directo en `main`.
+
+Detalle completo de ambos bugs en `[[feedback_gotchas_tecnicos_fabrica]]`.
+
+**Pendiente anotado, no iniciado:** crear Issues desde afuera de GitHub
+(formulario/webhook, candidato n8n) — ver §4 punto 8.
