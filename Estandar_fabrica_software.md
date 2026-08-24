@@ -17,17 +17,24 @@ vez) → **el merge final sigue siendo, siempre, una decisión 100% manual**.
 
 ## 1. Qué se copia tal cual (sin editar nada)
 
+**Corregido 2026-08-24, con evidencia real** (segundo proyecto,
+`WebChat_Fabrica`) — esta tabla venía mal desde la primera versión: solo
+esto es genuinamente genérico, sin ningún contenido específico de
+`micomercio_bi_dashboard` adentro.
+
 | Archivo | De dónde |
 |---|---|
-| `.github/ISSUE_TEMPLATE/solicitud-cambio.yml` | Este repo |
+| `.github/ISSUE_TEMPLATE/solicitud-cambio.yml` | Este repo — pero revisar el campo `description:` del YAML antes de usarlo: la copia original traía hardcodeado "para micomercio_bi_dashboard" en el texto visible del formulario. Sin efecto funcional, pero se ve raro si no se corrige |
 | `.github/workflows/generar-plan.yml` | Este repo |
+| `.github/workflows/retroalimentar-plan.yml` | Este repo — faltaba en esta tabla en la versión anterior del documento, es igual de genérico que los otros tres workflows |
 | `.github/workflows/disparar-routine.yml` | Este repo (ya parametrizado) |
-| `.github/workflows/revisar-pr.yml` | Este repo (ya parametrizado) |
-| `.claude/agents/planificador.md` | Este repo |
-| `.claude/agents/revisor-codigo.md` | Este repo |
-| `.claude/agents/documentador.md` | Este repo (el proyecto destino necesita un doc técnico equivalente a `DOCUMENTACION_TECNICA.md`, o ajustar el nombre dentro del subagente) |
-| `.claude/agents/tester.md` | Este repo (queda definido pero fuera del flujo automático, igual que acá) |
 | `.claude/skills/estandares-seguridad-fabrica/SKILL.md` | Este repo — genérico a propósito, no menciona nada de este dashboard. Cada proyecto nuevo lo interpreta una vez en su propio skill de calidad (marcando aplica/no aplica/gap por punto), como se hizo acá en `modelo-calidad-iso25010` §6 |
+
+## 1.1 Se copia, pero con referencias puntuales para ajustar
+
+| Archivo | Qué hay que cambiar |
+|---|---|
+| `.github/workflows/revisar-pr.yml` | El prompt hardcodea el nombre del subagente de dominio (`validador-metricas`) y el nombre del doc técnico (`DOCUMENTACION_TECNICA.md`). Si el proyecto nuevo no tiene subagente de dominio, hay que quitar esa invocación del prompt (no solo omitir el archivo del subagente); si su doc técnico se llama distinto (o es simplemente `README.md`, como en `WebChat_Fabrica`), hay que cambiar esa referencia también. Son 2-3 líneas puntuales, no una reescritura — pero si no se tocan, el subagente `documentador` va a buscar un archivo que no existe |
 
 ## 2. Qué hay que adaptar o escribir a medida
 
@@ -36,10 +43,26 @@ vez) → **el merge final sigue siendo, siempre, una decisión 100% manual**.
   (`planificador`, `revisor-codigo`, `documentador`) dependen de leerlo
   para conocer las convenciones reales del proyecto. Sin esto, la calidad
   del plan y de la revisión baja mucho.
+- **Los 4 subagentes de `.claude/agents/` (`planificador`, `revisor-codigo`,
+  `documentador`, `tester`) — CORRECCIÓN IMPORTANTE (2026-08-24): no son
+  copia tal cual, nunca lo fueron.** La versión anterior de este documento
+  los tenía mal clasificados en §1. Se leyeron completos al armar
+  `WebChat_Fabrica` y están escritos al 100% para el stack de
+  `micomercio_bi_dashboard` (Prisma, Postgres, `siteId`,
+  `DOCUMENTACION_TECNICA.md`, `dashboard.service.js`) — ninguno de esos
+  conceptos existe en un proyecto con otro stack. Lo que sí es reutilizable
+  es la **estructura**: el formato de salida de cada uno, la sección "Qué
+  NO hacer", y el rol de cada subagente en el pipeline. Al prender la
+  fábrica en un proyecto nuevo, usar los cuatro archivos de acá como
+  **plantilla de forma**, y reescribir el contenido (ejemplos, checks
+  específicos, convenciones referenciadas) para el proyecto destino —
+  igual de qué se hace con `CLAUDE.md`, no como una copia de archivo.
 - **Un subagente de dominio, si aplica** (`validador-metricas` en este
   repo) — es específico de este dashboard, no se reutiliza tal cual. Cada
   proyecto decide si necesita el suyo (para lógica de negocio/cálculos
-  particulares) o si lo omite directamente del prompt de `revisar-pr.yml`.
+  particulares) o si lo omite directamente del prompt de `revisar-pr.yml`
+  (ver §1.1 — si se omite, hay que editar el prompt, no alcanza con no
+  crear el archivo).
 
 ## 3. Checklist de configuración (una sola vez por proyecto)
 
@@ -135,6 +158,20 @@ confirma además que la parametrización de este documento no cambia el
 comportamiento — es la misma fábrica, solo que ahora configurable por
 proyecto sin tocar código.
 
-**Pendiente antes de decir que el estándar está terminado:** probarlo en
-un segundo proyecto real, no solo documentarlo (ver
-`Roadmap_automatizacion_fabrica.md` §6.2, punto 4).
+## 6. Segundo proyecto en curso — lo que ya corrigió este documento
+
+`WebChat_Fabrica` (copia independiente de `webmicomercio`, un widget de
+chat React/Vite sin base de datos propia) es la primera prueba real del
+checklist completo, arrancada el 2026-08-24. Ya en el primer intento
+aparecieron 3 hallazgos reales, todos ya corregidos en este documento
+(§1, §1.1, §2): la tabla de "copia tal cual" tenía un workflow faltante
+(`retroalimentar-plan.yml`), clasificaba mal los 4 subagentes genéricos
+(no son copia tal cual), y no advertía que `revisar-pr.yml` necesita
+ajustes puntuales. Es exactamente la razón de ser de probarlo en un
+proyecto real antes de darlo por confirmado — encontrar esto documentando
+en abstracto habría sido mucho más difícil.
+
+**Pendiente para terminar de confirmar el estándar:** completar los 8
+pasos de configuración en `WebChat_Fabrica` (100% del lado del usuario,
+vía navegador — GitHub App, label, secrets, Routines) y correr un Issue
+real de bajo riesgo de punta a punta, con este documento ya corregido.
