@@ -1,0 +1,61 @@
+name: Ajustar PR tras revisión humana
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  ajustar_pr:
+    if: >
+      github.event.issue.pull_request != null &&
+      github.event.comment.user.type != 'Bot' &&
+      contains(fromJSON('["OWNER","COLLABORATOR","MEMBER"]'), github.event.comment.author_association) &&
+      startsWith(github.event.comment.body, '/ajustar')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Obtener la rama del PR
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          HEAD_REF=$(gh pr view ${{ github.event.issue.number }} --repo ${{ github.repository }} --json headRefName -q '.headRefName')
+          echo "head_ref=$HEAD_REF" >> "$GITHUB_OUTPUT"
+
+      - name: 🔧 Disparar Routine de corrección vía API
+        id: fire
+        env:
+          FIX_PR_ROUTINE_API_TOKEN: ${{ secrets.FIX_PR_ROUTINE_API_TOKEN }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+          REPO: ${{ github.repository }}
+          HEAD_REF: ${{ steps.pr.outputs.head_ref }}
+          COMMENT_USER: ${{ github.event.comment.user.login }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+        run: |
+          PAYLOAD=$(jq -n \
+            --arg pr "$PR_NUMBER" \
+            --arg repo "$REPO" \
+            --arg ref "$HEAD_REF" \
+            --arg user "$COMMENT_USER" \
+            --arg body "$COMMENT_BODY" \
+            '{text: ("PR #" + $pr + " de " + $repo + " (rama " + $ref + ") tiene un ajuste pedido por un humano (" + $user + "): " + $body + ". Aplicá el ajuste directamente sobre esa rama, commiteá y empujá — NO abras un PR nuevo, este PR ya existe y se actualiza solo con el push.")}')
+          RESPONSE=$(curl -s -X POST "https://api.anthropic.com/v1/claude_code/routines/${{ vars.ROUTINE_CORREGIR_ID }}/fire" \
+            -H "Authorization: Bearer $FIX_PR_ROUTINE_API_TOKEN" \
+            -H "anthropic-beta: experimental-cc-routine-2026-04-01" \
+            -H "anthropic-version: 2023-06-01" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD")
+          echo "$RESPONSE"
+          echo "session_url=$(echo "$RESPONSE" | jq -r '.claude_code_session_url // empty')" >> "$GITHUB_OUTPUT"
+
+      - name: Comentar confirmación en el PR
+        if: steps.fire.outputs.session_url != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr comment ${{ github.event.issue.number }} --repo ${{ github.repository }} \
+            --body "🔧 Ajuste solicitado — Routine disparada sobre esta misma rama. Seguimiento: ${{ steps.fire.outputs.session_url }}"
