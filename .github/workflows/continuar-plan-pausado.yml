@@ -1,0 +1,56 @@
+name: Continuar plan pausado
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  continuar_plan:
+    if: >
+      github.event.issue.pull_request == null &&
+      github.event.comment.user.type != 'Bot' &&
+      contains(fromJSON('["OWNER","COLLABORATOR","MEMBER"]'), github.event.comment.author_association) &&
+      startsWith(github.event.comment.body, '/continuar') &&
+      contains(github.event.issue.labels.*.name, 'esperando-humano')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sacar la label esperando-humano (evita re-disparos mientras trabaja)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue edit ${{ github.event.issue.number }} --repo ${{ github.repository }} \
+            --remove-label "esperando-humano"
+
+      - name: ▶️ Continuar Routine vía API
+        id: fire
+        env:
+          ROUTINE_API_TOKEN: ${{ secrets.ROUTINE_API_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          REPO: ${{ github.repository }}
+          COMMENT_USER: ${{ github.event.comment.user.login }}
+        run: |
+          PAYLOAD=$(jq -n \
+            --arg n "$ISSUE_NUMBER" \
+            --arg repo "$REPO" \
+            --arg user "$COMMENT_USER" \
+            '{text: ("Issue #" + $n + " de " + $repo + " estaba pausado esperando respuesta humana. " + $user + " respondió en un comentario nuevo del Issue — leé el hilo completo del Issue (tu propia pregunta y la respuesta más reciente) y CONTINUÁ el desarrollo en la rama existente claude/issue-" + $n + "-* (no crees una rama nueva, no reinicies el trabajo ya hecho). Si no encontrás esa rama, algo salió mal: comentalo en el Issue y detenete ahí, no arranques de cero.")}')
+          RESPONSE=$(curl -s -X POST "https://api.anthropic.com/v1/claude_code/routines/${{ vars.ROUTINE_IMPLEMENTAR_ID }}/fire" \
+            -H "Authorization: Bearer $ROUTINE_API_TOKEN" \
+            -H "anthropic-beta: experimental-cc-routine-2026-04-01" \
+            -H "anthropic-version: 2023-06-01" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD")
+          echo "$RESPONSE"
+          echo "session_url=$(echo "$RESPONSE" | jq -r '.claude_code_session_url // empty')" >> "$GITHUB_OUTPUT"
+
+      - name: Comentar confirmación en el Issue
+        if: steps.fire.outputs.session_url != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue comment ${{ github.event.issue.number }} --repo ${{ github.repository }} \
+            --body "▶️ Retomando el desarrollo con tu respuesta. Seguimiento: ${{ steps.fire.outputs.session_url }}"
