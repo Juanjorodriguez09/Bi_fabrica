@@ -28,6 +28,7 @@ esto es genuinamente genérico, sin ningún contenido específico de
 | `.github/workflows/generar-plan.yml` | Este repo |
 | `.github/workflows/retroalimentar-plan.yml` | Este repo — faltaba en esta tabla en la versión anterior del documento, es igual de genérico que los otros tres workflows |
 | `.github/workflows/disparar-routine.yml` | Este repo (ya parametrizado) |
+| `.github/workflows/ajustar-pr.yml` | Este repo — agregado 2026-08-25, portado desde `WebChat_Fabrica`. 100% genérico (usa `${{ github.repository }}` en todo, sin nada hardcodeado). Cierra el gap de que `revisar-pr.yml` solo reacciona a eventos de PR (`opened`/`synchronize`), nunca a un comentario humano: un comentario que empieza con `/ajustar <texto libre>` en un PR abierto dispara la misma Routine `corregir-hallazgos-pr` (reutiliza `ROUTINE_CORREGIR_ID`/`FIX_PR_ROUTINE_API_TOKEN`, sin secrets nuevos) |
 | `.claude/skills/estandares-seguridad-fabrica/SKILL.md` | Este repo — genérico a propósito, no menciona nada de este dashboard. Cada proyecto nuevo lo interpreta una vez en su propio skill de calidad (marcando aplica/no aplica/gap por punto), como se hizo acá en `modelo-calidad-iso25010` §6 |
 
 ## 1.1 Se copia, pero con referencias puntuales para ajustar
@@ -87,9 +88,15 @@ En orden — cada paso depende del anterior:
    - `implementar-plan-aprobado` — mismo prompt que la de este repo (lee
      el número de Issue del payload, busca el plan en los comentarios, lo
      implementa, abre PR, nunca mergea).
-   - `corregir-hallazgos-pr` — mismo prompt que la de este repo (lee el
-     número de PR del payload, corrige solo hallazgos reales/críticos
-     sobre la rama existente, nunca abre PR nuevo, nunca mergea).
+   - `corregir-hallazgos-pr` — mismo prompt que la de este repo, **con la
+     distinción de dos disparadores agregada 2026-08-25** (ver el prompt
+     actual de esta Routine, no solo este resumen): además del disparo
+     automático post-revisión (busca hallazgos en el comentario
+     consolidado, se detiene si no hay), ahora también atiende el disparo
+     MANUAL de `ajustar-pr.yml` — si el payload dice "tiene un ajuste
+     pedido por un humano: <texto>", aplica ese texto tal cual, sin buscar
+     hallazgos de revisión. Sin este agregado, `/ajustar` en el proyecto
+     nuevo dispara la Routine pero esta se frena sola sin hacer nada.
    - Para cada una: "Add an API trigger" en la UI de la Routine, guardar el
      token (`sk-ant-oat01-...`, se muestra una sola vez).
 6. **Guardar los secrets de disparo**: `ROUTINE_API_TOKEN` (token de
@@ -171,7 +178,13 @@ ajustes puntuales. Es exactamente la razón de ser de probarlo en un
 proyecto real antes de darlo por confirmado — encontrar esto documentando
 en abstracto habría sido mucho más difícil.
 
-**Pendiente para terminar de confirmar el estándar:** completar los 8
-pasos de configuración en `WebChat_Fabrica` (100% del lado del usuario,
-vía navegador — GitHub App, label, secrets, Routines) y correr un Issue
-real de bajo riesgo de punta a punta, con este documento ya corregido.
+**Confirmado en vivo, 2026-08-25** — los 8 pasos de configuración se
+completaron en `WebChat_Fabrica` y el ciclo corrió de punta a punta con
+Issues reales, dos veces (Issue #3→PR#4, Issue #5/#6→PR#6), ambos
+mergeados. El estándar queda validado en un segundo proyecto, no solo en
+el original. Un cuarto hallazgo se sumó en el camino, ya corregido acá y
+en `[[feedback_gotchas_tecnicos_fabrica]]`: la ausencia total de un
+mecanismo para que un humano pida un ajuste sobre un PR ya abierto, antes
+de mergear, sin salir del flujo de comentarios — se cerró con
+`ajustar-pr.yml` (§1) y la actualización de `corregir-hallazgos-pr` (§3,
+paso 5), y ya se portó también a este repo.
