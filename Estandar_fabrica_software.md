@@ -29,6 +29,7 @@ esto es genuinamente genérico, sin ningún contenido específico de
 | `.github/workflows/retroalimentar-plan.yml` | Este repo — faltaba en esta tabla en la versión anterior del documento, es igual de genérico que los otros tres workflows |
 | `.github/workflows/disparar-routine.yml` | Este repo (ya parametrizado) |
 | `.github/workflows/ajustar-pr.yml` | Este repo — agregado 2026-08-25, portado desde `WebChat_Fabrica`. 100% genérico (usa `${{ github.repository }}` en todo, sin nada hardcodeado). Cierra el gap de que `revisar-pr.yml` solo reacciona a eventos de PR (`opened`/`synchronize`), nunca a un comentario humano: un comentario que empieza con `/ajustar <texto libre>` en un PR abierto dispara la misma Routine `corregir-hallazgos-pr` (reutiliza `ROUTINE_CORREGIR_ID`/`FIX_PR_ROUTINE_API_TOKEN`, sin secrets nuevos) |
+| `.github/workflows/continuar-plan-pausado.yml` | Este repo — agregado 2026-08-25, portado desde `WebChat_Fabrica`. 100% genérico. Complemento del mecanismo de "pausa y pregunta" de `implementar-plan-aprobado` (ver §3 paso 5): un comentario `/continuar <respuesta>` en un Issue con label `esperando-humano` puesta saca la label y vuelve a disparar la misma Routine `implementar-plan-aprobado`, que retoma la rama existente en vez de empezar de cero |
 | `.claude/skills/estandares-seguridad-fabrica/SKILL.md` | Este repo — genérico a propósito, no menciona nada de este dashboard. Cada proyecto nuevo lo interpreta una vez en su propio skill de calidad (marcando aplica/no aplica/gap por punto), como se hizo acá en `modelo-calidad-iso25010` §6 |
 
 ## 1.1 Se copia, pero con referencias puntuales para ajustar
@@ -72,10 +73,12 @@ En orden — cada paso depende del anterior:
 1. **Instalar la GitHub App "Claude Code"** (`github.com/apps/claude`) con
    scope solo al repo nuevo — no "All repositories". Sin esto, la action
    no puede comentar aunque el token esté bien.
-2. **Crear la label `solicitud`** en el repo, manualmente (Settings →
-   Labels). Los formularios de Issue *no* la crean solos aunque el YAML la
-   declare — es un gotcha ya confirmado, ver
-   `[[feedback_gotchas_tecnicos_fabrica]]`.
+2. **Crear las labels `solicitud` y `esperando-humano`** en el repo,
+   manualmente (Settings → Labels). Los formularios de Issue *no* crean
+   `solicitud` solos aunque el YAML la declare — es un gotcha ya
+   confirmado, ver `[[feedback_gotchas_tecnicos_fabrica]]`.
+   `esperando-humano` la usa el mecanismo de "pausa y pregunta" (ver paso
+   5) — sin ella creada, `gh issue edit --add-label` falla.
 3. **Configurar el secret `CLAUDE_CODE_OAUTH_TOKEN`** (Settings → Secrets
    and variables → Actions → Secrets) — se genera con `claude setup-token`,
    consume cuota de suscripción Pro/Max, no facturación por token. Expira
@@ -87,7 +90,17 @@ En orden — cada paso depende del anterior:
    environment de este proyecto nuevo:
    - `implementar-plan-aprobado` — mismo prompt que la de este repo (lee
      el número de Issue del payload, busca el plan en los comentarios, lo
-     implementa, abre PR, nunca mergea).
+     implementa, abre PR, nunca mergea). **Incluye el mecanismo de "pausa
+     y pregunta" agregado 2026-08-25** (paso 0 y 3/3.5 del prompt actual):
+     si aparece una decisión real, no prevista ni en el plan ni en sus
+     "Preguntas abiertas", que cambia comportamiento o alcance de forma no
+     trivial, la Routine comenta la pregunta en el Issue, agrega la label
+     `esperando-humano`, pushea el trabajo parcial y termina el turno sin
+     abrir PR — en vez de resolverla sola. Al recibir un `/continuar` (vía
+     `continuar-plan-pausado.yml`), retoma la misma rama existente en vez
+     de empezar de cero. Validado en vivo de punta a punta en
+     `WebChat_Fabrica` con una prueba deliberada (Issue #7 → pausa → PR
+     #8).
    - `corregir-hallazgos-pr` — mismo prompt que la de este repo, **con la
      distinción de dos disparadores agregada 2026-08-25** (ver el prompt
      actual de esta Routine, no solo este resumen): además del disparo
@@ -188,3 +201,16 @@ mecanismo para que un humano pida un ajuste sobre un PR ya abierto, antes
 de mergear, sin salir del flujo de comentarios — se cerró con
 `ajustar-pr.yml` (§1) y la actualización de `corregir-hallazgos-pr` (§3,
 paso 5), y ya se portó también a este repo.
+
+**Mecanismo de "pausa y pregunta" construido y validado, 2026-08-25** —
+`continuar-plan-pausado.yml` (§1) más la actualización de
+`implementar-plan-aprobado` (§3, paso 5). En el camino apareció un quinto
+hallazgo: las Routines postean sus comentarios de estado usando la sesión
+del usuario humano, no una identidad de bot — `retroalimentar-plan.yml`
+las tomaba por feedback humano real y disparaba una replanificación
+innecesaria (dos veces, en esta misma prueba). Corregido excluyendo por la
+firma fija de Claude Code y por el comando `/continuar` — detalle completo
+en `[[feedback_gotchas_tecnicos_fabrica]]`. **Corregido en los dos repos
+existentes, no solo documentado acá** — es un fix del mecanismo genérico,
+no algo específico de un proyecto (criterio explícito: ver
+`[[feedback_estandarizar_vs_a_medida]]`).
