@@ -65,6 +65,19 @@ esto es genuinamente genérico, sin ningún contenido específico de
   particulares) o si lo omite directamente del prompt de `revisar-pr.yml`
   (ver §1.1 — si se omite, hay que editar el prompt, no alcanza con no
   crear el archivo).
+- **`.claude/skills/<nombre>/SKILL.md` — el skill de calidad propio del
+  proyecto (aquí `modelo-calidad-iso25010`) — PASO OBLIGATORIO, no
+  opcional (corregido 2026-08-27: en `WebChat_Fabrica` este paso se saltó
+  al armar el proyecto, porque antes solo estaba mencionado de pasada en
+  la nota de §1, no como ítem propio de este checklist — ya corregido ahí
+  y en este documento).** Interpreta las 8 características de ISO/IEC
+  25010 para el stack real del proyecto (no la definición genérica de la
+  norma), incluyendo una sección de Seguridad que traduce los 20 puntos de
+  `estandares-seguridad-fabrica` (aplica/no aplica/gap, con justificación)
+  a ese proyecto concreto. Lo usan `revisor-codigo` (como estructura del
+  reporte) y `planificador` (en la sección "Impacto y riesgos"). Usar el
+  de este repo como plantilla de forma, no de contenido — el stack real
+  cambia todas las interpretaciones.
 
 ## 3. Checklist de configuración (una sola vez por proyecto)
 
