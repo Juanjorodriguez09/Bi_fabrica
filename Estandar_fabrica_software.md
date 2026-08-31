@@ -136,6 +136,30 @@ En orden — cada paso depende del anterior:
    reversible) antes de confiar el flujo a un cambio importante — es lo
    que se hizo acá con el tooltip de "Rebote" después de parametrizar los
    workflows.
+9. **Conectar el repo nuevo al agente PM diario** (agregado 2026-08-31,
+   ver `[[project_bi_fabrica_estado]]`) — el reporte diario de estado de
+   la fábrica (`Juanjorodriguez09/fabrica-status`, Routine
+   `reporte-diario-fabrica`) no descubre repos nuevos solo. Es un paso
+   manual en dos partes, y las dos son obligatorias o el repo nuevo queda
+   invisible en el reporte sin ningún error que lo avise:
+   - **Conectar el repo como fuente adicional de la Routine**: en la
+     rutina `reporte-diario-fabrica` (editar), agregar el repo nuevo con
+     el botón `+` al lado de los repos ya conectados. Esto es un límite de
+     seguridad de la plataforma, no configurable de otro modo: una sesión
+     en la nube solo puede llamar a la API de GitHub de los repos que
+     tiene explícitamente conectados, sin importar qué token se le pase
+     por variable de entorno — confirmado en vivo el 2026-08-31 cuando el
+     primer intento con `Bi_fabrica`/`WebChat_Fabrica` sin conectar dio
+     `403` pese a que el token (`GH_TOKEN_FABRICA`) era válido.
+   - **Agregar el repo a la lista fija dentro de**
+     `.claude/agents/pm-diario.md` **(en el repo `fabrica-status`)** —
+     el subagente no descubre repos dinámicamente, tiene la lista
+     hardcodeada a propósito (ver el archivo).
+   Si alguno de los dos pasos se salta, el síntoma es distinto: sin
+   conectar el repo a la Routine, el reporte lo intenta leer y falla con
+   `403` (visible, avisa); sin agregarlo a la lista de `pm-diario.md`, el
+   reporte simplemente no lo menciona (silencioso, no avisa) — por eso el
+   orden de este ítem no importa, pero hacer los dos sí.
 
 ## 3.1 Si el proyecto nuevo está en otra cuenta/organización de GitHub
 
