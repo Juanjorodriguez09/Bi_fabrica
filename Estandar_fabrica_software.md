@@ -201,9 +201,10 @@ punta en una cuenta distinta — ver §5 y el pendiente en
   del patrón de la fábrica, es infraestructura aparte de cada proyecto.
 - **El merge a `main`** — siempre manual, en todos los proyectos, sin
   excepción. No hay ninguna configuración que lo automatice.
-- **Notificación de estado (Slack/push/etc.)** — todavía no está resuelto
-  ni siquiera en este repo piloto (ver roadmap §4, punto 6). No forma
-  parte del checklist hasta que se decida un canal.
+- **Notificación de estado por proyecto individual** (ej. avisar en cada
+  repo cuando algo se traba) — no existe, y no hace falta: el agente PM
+  diario (§7) ya cubre esta necesidad de forma centralizada, cruzando
+  todos los proyectos en un solo reporte en vez de un mecanismo por repo.
 
 ## 5. Evidencia de que esto ya se validó dos veces en el mismo repo
 
@@ -251,3 +252,126 @@ en `[[feedback_gotchas_tecnicos_fabrica]]`. **Corregido en los dos repos
 existentes, no solo documentado acá** — es un fix del mecanismo genérico,
 no algo específico de un proyecto (criterio explícito: ver
 `[[feedback_estandarizar_vs_a_medida]]`).
+
+## 7. Agente PM diario — una sola vez para toda la fábrica, no por proyecto
+
+A diferencia de §1-§6 (que se repiten por cada proyecto nuevo), esto se
+configura **una vez** y después cubre todos los proyectos a la vez.
+Genera un reporte diario del estado de todos los repos de la fábrica
+(Issues pendientes de aprobar, PRs pendientes de revisión/merge, ítems
+pausados esperando una decisión humana), publicado en GitHub y por
+Telegram. Confirmado en vivo el 2026-08-31.
+
+### 7.1 Qué se crea
+
+- **Un repo hub nuevo y dedicado** (acá: `Juanjorodriguez09/fabrica-status`)
+  — no vive dentro de ningún proyecto real. Solo contiene
+  `.claude/agents/pm-diario.md` (el subagente que arma el reporte) y un
+  `CLAUDE.md` mínimo.
+- **Un Issue fijo** en ese repo (acá `#1`, "📋 Estado diario de la
+  fábrica") — ahí se comenta cada corrida, queda como historial.
+- **Dos Personal Access Tokens (fine-grained) de mínimo privilegio** — no
+  uno solo, porque un fine-grained PAT no puede tener permisos distintos
+  por repo dentro de un mismo token:
+  - **Solo lectura** (`Issues`, `Pull requests`, `Metadata` — todo en
+    "Read-only") con acceso a los repos de proyecto de la fábrica
+    (`Bi_fabrica`, `WebChat_Fabrica`, y cualquiera que se sume — ver 7.3).
+  - **Lectura y escritura** (`Issues: Read and write`) con acceso SOLO al
+    repo hub (`fabrica-status`).
+  - Los dos con expiración de 1 año, nunca "sin expiración".
+- **Credenciales de Telegram**: el token del bot ya usado para crear
+  Issues (recuperable en cualquier momento vía BotFather → `/mybots` →
+  elegir el bot → "API Token", sin necesidad de regenerarlo) y el
+  `chat_id` del destinatario (se obtiene revisando las ejecuciones del
+  workflow de n8n que ya escucha ese bot, o con `getUpdates` si el bot no
+  tiene webhook activo).
+- **Un Cloud Environment** (acá `fabrica-status-env`) vinculado al repo
+  hub, con:
+  - Acceso a la red: **Completo** (necesita salir a `api.telegram.org`,
+    no solo a GitHub).
+  - Variables de entorno (no hay una sección separada de "secrets" en
+    esta versión de la plataforma — la única advertencia real es que son
+    visibles a cualquiera que use el entorno; en cuenta individual sin
+    otros usuarios no es un problema, revisar de nuevo si esto se muda a
+    una organización con más gente):
+    ```
+    GH_TOKEN_FABRICA=<el PAT de solo lectura>
+    GH_TOKEN_STATUS=<el PAT de lectura/escritura>
+    TELEGRAM_BOT_TOKEN=<token del bot>
+    TELEGRAM_CHAT_ID=<chat_id del destinatario>
+    ISSUE_ESTADO_DIARIO=<número del Issue fijo, ej. 1>
+    ```
+  - Script de configuración — instala `gh`, que no viene preinstalado en
+    el entorno y el subagente lo necesita para respetar la separación de
+    los dos tokens (sin esto, el agente puede terminar usando un
+    conector MCP de GitHub con un alcance de acceso distinto al
+    diseñado, sin que se note a simple vista):
+    ```bash
+    if ! command -v gh >/dev/null 2>&1; then
+      type -p curl >/dev/null && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+      sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
+      echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+      sudo apt update && sudo apt install gh -y
+    fi
+    ```
+- **Una Routine** (acá `reporte-diario-fabrica`) apuntando al repo hub y
+  a ese entorno, con:
+  - Activador de **horario** (Schedule), no "Vía API" — diario, hora fija
+    (acá 8:00 AM, zona Bogotá/GMT-5).
+  - Repos conectados: el repo hub más **cada repo de proyecto que el
+    reporte debe leer** (ver el gotcha de plataforma en 7.3 — esto es
+    obligatorio, no opcional).
+  - Instrucciones:
+    ```
+    Ejecutá de forma síncrona (no delegues a un subagente en background) las
+    instrucciones de .claude/agents/pm-diario.md en este mismo repo. Generá
+    el reporte diario de estado de la fábrica y publicalo en los dos canales
+    indicados ahí: el Issue fijo de este repo y Telegram.
+    ```
+
+### 7.2 Cómo clasifica y publica el reporte
+
+El subagente `pm-diario.md` no tiene una lista fija de repos —
+la descubre en cada corrida con
+`GH_TOKEN="$GH_TOKEN_FABRICA" gh repo list <owner> --json nameWithOwner`,
+así que agregar un repo nuevo no implica editar este archivo (ver 7.3
+para lo que sí hay que tocar). Para cada Issue/PR abierto de cada repo
+devuelto, lo ubica en una de 5 categorías por prioridad — Pausado
+esperando decisión humana / PR esperando revisión o merge / Pendiente de
+aprobar / Recién abierto sin plan / Estancado — más una sección de
+"Completado ayer". Publica siempre en los dos canales (Issue fijo +
+Telegram), incluso si algo falló, dejando el error explícito en vez de
+omitir en silencio. Nunca comenta en los repos de proyecto, solo lee de
+ahí.
+
+### 7.3 Sumar un proyecto nuevo al reporte — 2 pasos obligatorios, no 1
+
+Este es el mismo ítem que §3 paso 9, repetido acá porque es fácil
+olvidarlo si solo se mira este documento desde la perspectiva de "un
+proyecto nuevo":
+
+1. **Agregar el repo al scope del PAT `GH_TOKEN_FABRICA`** (GitHub →
+   Settings → Developer settings → fine-grained tokens → editar el
+   token → agregar el repo).
+2. **Conectar el repo como fuente adicional de la Routine
+   `reporte-diario-fabrica`** (editar la Routine → botón `+` junto a los
+   repos ya conectados).
+
+El paso 2 no es opcional aunque el paso 1 ya se haya hecho: **una sesión
+de Routine en la nube solo puede llamar a la API de GitHub de los repos
+explícitamente conectados a ELLA, sin importar qué acceso tenga el
+token** — confirmado en vivo el 2026-08-31 (`403` con un token válido,
+hasta conectar el repo). Sin el paso 2, el reporte falla con un error
+visible para ese repo. Sin el paso 1, el repo directamente no aparece en
+la lista que descubre `gh repo list` — ninguna de las dos fallas es
+silenciosa siempre que `pm-diario.md` esté configurado como se documenta
+en 7.1 (reportar cualquier error explícito, nunca omitir en silencio).
+
+### 7.4 Qué falta validar
+
+Confirmado con datos reales de dos repos en la corrida del 2026-08-31.
+Pendiente: una corrida completa después del fix de `gh` (script de
+configuración de 7.1) para confirmar que ya no usa el conector MCP de
+GitHub como fallback, y que la fecha del encabezado se calcula en el
+momento de la ejecución (bug real encontrado en la primera corrida, ya
+corregido en el prompt del subagente).
