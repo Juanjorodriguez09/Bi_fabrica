@@ -367,11 +367,28 @@ la lista que descubre `gh repo list` — ninguna de las dos fallas es
 silenciosa siempre que `pm-diario.md` esté configurado como se documenta
 en 7.1 (reportar cualquier error explícito, nunca omitir en silencio).
 
-### 7.4 Qué falta validar
+### 7.4 Gotcha de plataforma — GraphQL bloqueado en la sesión de la Routine
 
-Confirmado con datos reales de dos repos en la corrida del 2026-08-31.
-Pendiente: una corrida completa después del fix de `gh` (script de
-configuración de 7.1) para confirmar que ya no usa el conector MCP de
-GitHub como fallback, y que la fecha del encabezado se calcula en el
-momento de la ejecución (bug real encontrado en la primera corrida, ya
-corregido en el prompt del subagente).
+Confirmado en vivo el 2026-09-02: esta sesión rechaza casi todo GraphQL
+("This GraphQL query is not enabled for this session — only the pinned
+set of PR-review operations is served"). `gh repo list`, `gh issue list`
+y `gh pr list` usan GraphQL por dentro y **fallan siempre en esta
+sesión**, no solo con determinados campos — `pm-diario.md` ya está
+reescrito para usar exclusivamente `gh api` (REST puro) en todo:
+descubrimiento de repos (`gh api user/repos`), listado de issues/PRs
+(`gh api repos/<owner>/<repo>/issues` y `.../pulls`), comentarios y
+reviews. Si se escribe un subagente nuevo que necesite listar
+issues/PRs desde una Routine, aplicar el mismo criterio desde el
+principio en vez de descubrirlo por prueba y error otra vez.
+
+### 7.5 Validado en vivo
+
+- 2026-08-31: primera corrida real, con datos de los dos repos de
+  proyecto (encontró el bug de la fecha fija y el uso del conector MCP en
+  vez de `gh` — ambos ya corregidos).
+- 2026-09-02: corrida posterior al fix de `gh` — usó los tokens
+  correctos vía `gh` (no MCP) y la fecha se calculó bien; encontró el
+  bloqueo de GraphQL de 7.4, ya corregido en el subagente.
+- Pendiente: una corrida más después del fix de GraphQL (REST puro) para
+  confirmar que el reporte sale limpio, sin ningún error en la sección
+  final.
