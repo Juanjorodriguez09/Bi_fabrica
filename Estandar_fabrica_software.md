@@ -264,21 +264,32 @@ Telegram. Confirmado en vivo el 2026-08-31.
 
 ### 7.1 Qué se crea
 
-- **Un repo hub nuevo y dedicado** (acá: `Juanjorodriguez09/fabrica-status`)
-  — no vive dentro de ningún proyecto real. Solo contiene
-  `.claude/agents/pm-diario.md` (el subagente que arma el reporte) y un
-  `CLAUDE.md` mínimo.
-- **Un Issue fijo** en ese repo (acá `#1`, "📋 Estado diario de la
+- **Un repo hub nuevo y dedicado, privado** (acá:
+  `Juanjorodriguez09/fabrica-status`) — no vive dentro de ningún proyecto
+  real. Solo contiene `.claude/agents/pm-diario.md` (el subagente que
+  arma el reporte) y un `CLAUDE.md` mínimo.
+- **Un segundo repo, público, solo para el dashboard visual** (acá:
+  `Juanjorodriguez09/fabrica-status-dashboard`, agregado 2026-09-05) —
+  separado a propósito del repo hub: GitHub Pages privado requiere plan
+  Pro/Team/Enterprise, y hacer público el repo hub expondría el
+  historial completo de comentarios del Issue fijo (más detalle que el
+  snapshot curado). Este repo solo tiene `index.html` (la vista) y
+  `data/estado.json` (el snapshot que genera cada corrida) — nada
+  operativo.
+- **Un Issue fijo** en el repo hub (acá `#1`, "📋 Estado diario de la
   fábrica") — ahí se comenta cada corrida, queda como historial.
-- **Dos Personal Access Tokens (fine-grained) de mínimo privilegio** — no
-  uno solo, porque un fine-grained PAT no puede tener permisos distintos
-  por repo dentro de un mismo token:
+- **Tres Personal Access Tokens (fine-grained) de mínimo privilegio** —
+  no uno solo, porque un fine-grained PAT no puede tener permisos
+  distintos por repo dentro de un mismo token:
   - **Solo lectura** (`Issues`, `Pull requests`, `Metadata` — todo en
     "Read-only") con acceso a los repos de proyecto de la fábrica
     (`Bi_fabrica`, `WebChat_Fabrica`, y cualquiera que se sume — ver 7.3).
   - **Lectura y escritura** (`Issues: Read and write`) con acceso SOLO al
     repo hub (`fabrica-status`).
-  - Los dos con expiración de 1 año, nunca "sin expiración".
+  - **Lectura y escritura** (`Contents: Read and write`) con acceso SOLO
+    al repo del dashboard (`fabrica-status-dashboard`) — usado para
+    `git push`, no para la Contents API (ver 7.4.3).
+  - Los tres con expiración de 1 año, nunca "sin expiración".
 - **Credenciales de Telegram**: el token del bot ya usado para crear
   Issues (recuperable en cualquier momento vía BotFather → `/mybots` →
   elegir el bot → "API Token", sin necesidad de regenerarlo) y el
@@ -296,7 +307,8 @@ Telegram. Confirmado en vivo el 2026-08-31.
     una organización con más gente):
     ```
     GH_TOKEN_FABRICA=<el PAT de solo lectura>
-    GH_TOKEN_STATUS=<el PAT de lectura/escritura>
+    GH_TOKEN_STATUS=<el PAT de lectura/escritura del repo hub>
+    GH_TOKEN_DASHBOARD=<el PAT de lectura/escritura del repo del dashboard>
     TELEGRAM_BOT_TOKEN=<token del bot>
     TELEGRAM_CHAT_ID=<chat_id del destinatario>
     ISSUE_ESTADO_DIARIO=<número del Issue fijo, ej. 1>
@@ -318,9 +330,10 @@ Telegram. Confirmado en vivo el 2026-08-31.
   a ese entorno, con:
   - Activador de **horario** (Schedule), no "Vía API" — diario, hora fija
     (acá 8:00 AM, zona Bogotá/GMT-5).
-  - Repos conectados: el repo hub más **cada repo de proyecto que el
-    reporte debe leer** (ver el gotcha de plataforma en 7.3 — esto es
-    obligatorio, no opcional).
+  - Repos conectados: el repo hub, el repo del dashboard, más **cada
+    repo de proyecto que el reporte debe leer** (ver el gotcha de
+    plataforma en 7.3/7.4 — esto es obligatorio, no opcional, para los
+    tres tipos de repo).
   - Instrucciones:
     ```
     Ejecutá de forma síncrona (no delegues a un subagente en background) las
@@ -331,64 +344,126 @@ Telegram. Confirmado en vivo el 2026-08-31.
 
 ### 7.2 Cómo clasifica y publica el reporte
 
-El subagente `pm-diario.md` no tiene una lista fija de repos —
-la descubre en cada corrida con
-`GH_TOKEN="$GH_TOKEN_FABRICA" gh repo list <owner> --json nameWithOwner`,
-así que agregar un repo nuevo no implica editar este archivo (ver 7.3
-para lo que sí hay que tocar). Para cada Issue/PR abierto de cada repo
-devuelto, lo ubica en una de 5 categorías por prioridad — Pausado
-esperando decisión humana / PR esperando revisión o merge / Pendiente de
-aprobar / Recién abierto sin plan / Estancado — más una sección de
-"Completado ayer". Publica siempre en los dos canales (Issue fijo +
-Telegram), incluso si algo falló, dejando el error explícito en vez de
-omitir en silencio. Nunca comenta en los repos de proyecto, solo lee de
-ahí.
+`pm-diario.md` mantiene una **lista fija de repos** (ver 7.4 — no hay
+forma de descubrirla dinámicamente, se probó y no es posible). Para cada
+Issue/PR abierto de cada repo de la lista, lo ubica en una de 6
+categorías por prioridad — Pausado esperando decisión humana / PR
+esperando revisión o merge / Pendiente de aprobar / Recién abierto sin
+plan / **Cierre administrativo pendiente** (Issue con PR ya mergeado,
+solo falta cerrarlo — distinto de "trabado de verdad", ver más abajo) /
+Estancado — más una sección de "Completado ayer". Publica siempre en
+**tres** canales (Issue fijo en `fabrica-status`, Telegram, y
+`data/estado.json` en el repo público `fabrica-status-dashboard` que
+alimenta el dashboard visual — ver 7.6), incluso si algo falló, dejando
+el error explícito en vez de omitir en silencio. Nunca comenta en los
+repos de proyecto, solo lee de ahí.
 
-### 7.3 Sumar un proyecto nuevo al reporte — 2 pasos obligatorios, no 1
+**Por qué existe "Cierre administrativo pendiente" aparte de
+"Estancado"** (agregado 2026-09-05, a pedido del jefe del usuario en la
+primera revisión del dashboard): un Issue con el PR ya mergeado, que solo
+le falta el clic de cerrarse, no está "trabado" en ningún sentido real —
+mezclarlo con Issues genuinamente sin resolución (esperando algo, sin
+actividad) le restaba precisión al reporte y hacía parecer más grave de
+lo que era. "Estancado" ahora significa específicamente eso: sin
+actividad hace más de 5 días Y sin un PR mergeado que lo resuelva.
+
+### 7.3 Sumar un proyecto nuevo al reporte — 3 pasos obligatorios, no 2
 
 Este es el mismo ítem que §3 paso 9, repetido acá porque es fácil
 olvidarlo si solo se mira este documento desde la perspectiva de "un
-proyecto nuevo":
+proyecto nuevo". Son tres, no dos — ver 7.4 para por qué el tercero es
+inevitable:
 
 1. **Agregar el repo al scope del PAT `GH_TOKEN_FABRICA`** (GitHub →
    Settings → Developer settings → fine-grained tokens → editar el
    token → agregar el repo).
 2. **Conectar el repo como fuente adicional de la Routine
    `reporte-diario-fabrica`** (editar la Routine → botón `+` junto a los
-   repos ya conectados).
+   repos ya conectados) — sin esto, aunque el PAT ya lo vea, la llamada
+   real desde la sesión falla con `403`. Confirmado en vivo el
+   2026-08-31.
+3. **Agregar el repo a la lista fija dentro de `pm-diario.md`** — ver
+   7.4, no hay alternativa dinámica. Sin este paso el repo simplemente no
+   aparece en el reporte, sin ningún error visible (a diferencia del
+   paso 2, que si falla es un `403` explícito).
 
-El paso 2 no es opcional aunque el paso 1 ya se haya hecho: **una sesión
-de Routine en la nube solo puede llamar a la API de GitHub de los repos
-explícitamente conectados a ELLA, sin importar qué acceso tenga el
-token** — confirmado en vivo el 2026-08-31 (`403` con un token válido,
-hasta conectar el repo). Sin el paso 2, el reporte falla con un error
-visible para ese repo. Sin el paso 1, el repo directamente no aparece en
-la lista que descubre `gh repo list` — ninguna de las dos fallas es
-silenciosa siempre que `pm-diario.md` esté configurado como se documenta
-en 7.1 (reportar cualquier error explícito, nunca omitir en silencio).
+### 7.4 Gotchas de plataforma — proxy de red de la sesión de la Routine
 
-### 7.4 Gotcha de plataforma — GraphQL bloqueado en la sesión de la Routine
+Tres límites reales, descubiertos en vivo en sucesivas corridas, todos
+del mismo proxy que intercepta el tráfico de red de una sesión de
+Routine hacia GitHub:
 
-Confirmado en vivo el 2026-09-02: esta sesión rechaza casi todo GraphQL
-("This GraphQL query is not enabled for this session — only the pinned
-set of PR-review operations is served"). `gh repo list`, `gh issue list`
-y `gh pr list` usan GraphQL por dentro y **fallan siempre en esta
-sesión**, no solo con determinados campos — `pm-diario.md` ya está
-reescrito para usar exclusivamente `gh api` (REST puro) en todo:
-descubrimiento de repos (`gh api user/repos`), listado de issues/PRs
-(`gh api repos/<owner>/<repo>/issues` y `.../pulls`), comentarios y
-reviews. Si se escribe un subagente nuevo que necesite listar
-issues/PRs desde una Routine, aplicar el mismo criterio desde el
-principio en vez de descubrirlo por prueba y error otra vez.
+1. **GraphQL bloqueado casi por completo** (2026-09-02): "This GraphQL
+   query is not enabled for this session — only the pinned set of
+   PR-review operations is served". `gh repo list`, `gh issue list` y
+   `gh pr list` usan GraphQL por dentro y fallan siempre en una sesión de
+   Routine, no solo con determinados campos. Fix: usar exclusivamente
+   `gh api` (REST puro) para todo — descubrimiento, listado, comentarios,
+   reviews.
+2. **Ningún endpoint (ni REST ni GraphQL) permite "listar a qué tiene
+   acceso este token"** (2026-09-02): se probó `gh api user/repos` (REST)
+   con la esperanza de esquivar el bloqueo de GraphQL del punto 1, y
+   también falló: "sessions are bound to their configured repositories.
+   Use repository-scoped endpoints". No es un problema de GraphQL vs
+   REST — es que la sesión, por diseño, solo puede llamar a endpoints
+   **repo-scoped** (`repos/{owner}/{repo}/...`) de repos explícitamente
+   conectados a ella. No hay forma de descubrir repos dinámicamente desde
+   dentro de una Routine — de ahí la lista fija de 7.2/7.3.
+3. **Escrituras vía la API REST/GraphQL bloqueadas casi por completo**
+   (2026-09-05): "Write access to this GitHub API path is not permitted
+   through this proxy". `gh issue comment` funciona porque está en la
+   lista acotada de operaciones permitidas (comentarios de Issues/PRs),
+   pero un `PUT` de la Contents API (`repos/{owner}/{repo}/contents/...`,
+   usado para escribir un archivo cualquiera) no — sin importar el repo,
+   incluso uno conectado a la sesión. **`git clone`/`git push` por HTTPS
+   con un token embebido en la URL sí funciona** — no pasa por esta API,
+   es el mismo mecanismo que ya usan con éxito `implementar-plan-aprobado`
+   y `corregir-hallazgos-pr` para pushear commits. Cualquier subagente
+   nuevo que necesite escribir un archivo (no un comentario) desde una
+   Routine debe usar `git push`, nunca la Contents API.
+
+Si se escribe un subagente nuevo que necesite leer o escribir en GitHub
+desde una Routine, aplicar estos tres criterios desde el principio en vez
+de descubrirlos por prueba y error otra vez.
 
 ### 7.5 Validado en vivo
 
 - 2026-08-31: primera corrida real, con datos de los dos repos de
   proyecto (encontró el bug de la fecha fija y el uso del conector MCP en
-  vez de `gh` — ambos ya corregidos).
-- 2026-09-02: corrida posterior al fix de `gh` — usó los tokens
-  correctos vía `gh` (no MCP) y la fecha se calculó bien; encontró el
-  bloqueo de GraphQL de 7.4, ya corregido en el subagente.
-- Pendiente: una corrida más después del fix de GraphQL (REST puro) para
-  confirmar que el reporte sale limpio, sin ningún error en la sección
-  final.
+  vez de `gh` — ambos corregidos).
+- 2026-09-02: corrida posterior al fix de `gh` — usó los tokens correctos
+  vía `gh` (no MCP) y la fecha se calculó bien; encontró el bloqueo de
+  GraphQL (7.4.1), corregido; el intento de reemplazo con `gh api
+  user/repos` también falló (7.4.2), y se volvió a la lista fija.
+- 2026-09-05: primera corrida con el tercer canal (dashboard) conectado —
+  el reporte de texto/Telegram/Issue salió limpio, pero la escritura de
+  `data/estado.json` vía Contents API falló (7.4.3, ya corregido a
+  `git push`).
+- Pendiente: una corrida más para confirmar que el `git push` al repo del
+  dashboard funciona de punta a punta.
+
+### 7.6 Dashboard visual (agregado 2026-09-05)
+
+A pedido del jefe del usuario: además del Issue y Telegram (texto), un
+dashboard visual interactivo — kanban por categoría, KPIs, filtro por
+repo, búsqueda. HTML/CSS/JS puro, sin build step ni framework (mismo
+criterio que el frontend de este mismo dashboard, `public/dashboard.js`),
+publicado gratis con GitHub Pages.
+
+**Por qué es un repo aparte** (`fabrica-status-dashboard`, público) y no
+el mismo repo hub: GitHub Pages privado requiere plan Pro/Team/Enterprise
+— en el plan gratuito, Pages solo funciona en un repo público. Hacer
+público el repo hub expondría el historial completo de comentarios del
+Issue fijo (texto libre, potencialmente más detallado que el snapshot);
+en cambio el repo del dashboard solo tiene el snapshot curado
+(`data/estado.json`: número, título, motivo corto, fecha) — menos
+superficie expuesta por el mismo resultado. **Decisión explícita
+confirmada con el usuario**: publicar ahí los títulos/motivos del backlog
+interno (nombres de tooltips, pruebas de n8n/Telegram, etc.) es
+aceptable; los links a los Issues reales (privados) no se pueden abrir
+sin acceso.
+
+El JSON lo escribe `pm-diario.md` en cada corrida (ver 7.4.3 para el
+mecanismo de publicación). El dashboard no tiene backend ni build step —
+`index.html` hace `fetch("data/estado.json")` directo al abrir la
+página.
