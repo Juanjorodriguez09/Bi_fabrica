@@ -113,7 +113,15 @@ En orden — cada paso depende del anterior:
      `continuar-plan-pausado.yml`), retoma la misma rama existente en vez
      de empezar de cero. Validado en vivo de punta a punta en
      `WebChat_Fabrica` con una prueba deliberada (Issue #7 → pausa → PR
-     #8).
+     #8). **Incluye la palabra clave de cierre automático, agregada
+     2026-09-05** (bug real encontrado por el agente PM diario — ver
+     §7.2): al abrir el PR, la Routine debe incluir siempre en la
+     descripción `Closes #<número del Issue>`, **en inglés** — GitHub
+     no reconoce `Cierra #<número>` como palabra clave de cierre, así
+     que el merge nunca cerraba el Issue solo. Con la palabra clave en
+     inglés, el merge manual a `main` (que sigue siendo 100% humano, esto
+     no lo cambia) cierra el Issue como efecto nativo de GitHub, sin
+     workflow adicional.
    - `corregir-hallazgos-pr` — mismo prompt que la de este repo, **con la
      distinción de dos disparadores agregada 2026-08-25** (ver el prompt
      actual de esta Routine, no solo este resumen): además del disparo
