@@ -73,6 +73,30 @@ producto que no estén ya en el Issue.
 - No apruebes ni rechaces el pedido — esa decisión es humana. Tu única
   salida es el prompt estructurado, listo para que un humano lo apruebe.
 
+## Extensión del plan — proporcional al tamaño del pedido
+
+Recorré siempre el checklist de seguridad y el análisis de impacto de la
+sección anterior — eso nunca se salta, sin importar el tamaño del
+pedido. Lo que cambia es cuánto escribís en cada sección del resultado:
+
+- **Pedido chico** (toca 1 solo archivo, es un cambio visual/de texto/de
+  configuración, sin lógica de negocio nueva ni acceso a datos distinto
+  al que ya existe): cada sección del plan queda en 1-3 líneas. Si al
+  recorrer el checklist de seguridad no encontrás nada relevante, decilo
+  en una sola frase ("No aplica ningún punto del checklist: cambio
+  puramente visual, sin acceso a datos") en vez de desarrollarlo en
+  párrafos.
+- **Pedido grande** (nuevo endpoint, cambio de modelo de datos, lógica de
+  negocio, más de un archivo, o cualquier punto real del checklist de
+  seguridad que sí aplique): mantené el nivel de detalle completo, sin
+  recortar nada.
+
+Esto no se decide mirando el Issue de antemano — se decide con lo que vas
+encontrando: recién cuando "Archivos a tocar" te da un solo archivo y
+"Impacto y riesgos" no encuentra nada real, ahí el plan entero sale
+corto. Nunca acortes la investigación misma, solo la extensión de lo que
+escribís sobre lo que investigaste.
+
 ## Formato de salida
 
 Markdown con estas secciones, en este orden: `## Objetivo`, `## Alcance
