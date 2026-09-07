@@ -1,0 +1,32 @@
+name: Consulta o asesoría
+description: Pedí una recomendación, evaluación o explicación — no implica escribir código
+title: "[Consulta]: "
+labels: ["consulta"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Usá esto cuando necesitás una opinión, evaluación o explicación —
+        no un cambio de código. Por ejemplo: "¿conviene usar X o Y para
+        esto?", "¿esto que hicimos es seguro?", "¿por qué el endpoint Z se
+        comporta así?". Vas a recibir una respuesta única con el análisis
+        y una recomendación, sin plan de desarrollo ni `/aprobar` — si de
+        la respuesta surge que hace falta un cambio real, abrí después un
+        Issue de "Solicitud de cambio" aparte.
+
+  - type: textarea
+    id: pregunta
+    attributes:
+      label: Pregunta o tema
+      description: Qué necesitás que se evalúe, recomiende o explique.
+      placeholder: "Ej: ¿conviene mover el filtro de fechas al backend o dejarlo en el frontend como está ahora?"
+    validations:
+      required: true
+
+  - type: textarea
+    id: contexto
+    attributes:
+      label: Contexto (opcional)
+      description: Por qué surge esta duda, o cualquier antecedente relevante.
+    validations:
+      required: false

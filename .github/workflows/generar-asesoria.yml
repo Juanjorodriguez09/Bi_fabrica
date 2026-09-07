@@ -1,0 +1,77 @@
+name: Responder consulta de asesoría
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+  issues: write
+  id-token: write
+
+jobs:
+  responder_asesoria:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verificar label "consulta"
+        id: check
+        run: |
+          HAS_LABEL=$(jq -r '.issue.labels | map(.name == "consulta") | any' "$GITHUB_EVENT_PATH")
+          echo "has_label=$HAS_LABEL" >> "$GITHUB_OUTPUT"
+
+      - name: 🚚 Checkout Code
+        if: steps.check.outputs.has_label == 'true'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: 💬 Asesor — responder la consulta
+        if: steps.check.outputs.has_label == 'true'
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          show_full_output: true
+          settings: |
+            {
+              "permissions": {
+                "allow": ["Bash(gh issue comment *)", "Write"]
+              }
+            }
+          prompt: |
+            Usa el subagente asesor definido en .claude/agents/asesor.md para
+            responder la siguiente consulta (Issue #${{ github.event.issue.number }}
+            de este repo, título: "${{ github.event.issue.title }}"), siguiendo el
+            formato de salida que ese subagente define.
+
+            Esto NO es una solicitud de cambio de código — es una consulta/pedido de
+            asesoría. NO generes un plan de desarrollo, NO escribas código, NO abras
+            rama ni Pull Request, bajo ninguna circunstancia, aunque la respuesta
+            implique que "convendría" hacer un cambio — en ese caso, decilo como
+            recomendación dentro de la respuesta, no lo implementes.
+
+            IMPORTANTE sobre cómo invocar al subagente: este es un job de GitHub
+            Actions de un solo turno, sin sesión interactiva después. Invocalo de
+            forma SÍNCRONA/bloqueante (NO en segundo plano, NO como tarea async) y
+            esperá su resultado completo antes de seguir.
+
+            El cuerpo completo del Issue ya está incluido abajo, tal cual. NO
+            ejecutes `gh issue view`, git, ni ningún otro comando para volver a
+            consultarlo.
+
+            Cuando el subagente asesor te devuelva la respuesta, tu ÚLTIMO paso
+            obligatorio es publicarla como comentario en este mismo Issue:
+
+            ```
+            gh issue comment ${{ github.event.issue.number }} --body-file <ruta-a-un-archivo-temporal-con-la-respuesta>
+            ```
+
+            (escribí la respuesta a un archivo temporal con Write antes de correr
+            ese comando). Ningún otro comando de Bash está autorizado. La tarea no
+            está completa hasta que el comentario quede publicado.
+
+            CRÍTICO: ejecutá `gh issue comment` **exactamente una sola vez, con la
+            respuesta completa ya terminada** — no hay forma de "probar en seco",
+            cada ejecución publica un comentario real y visible.
+
+            Cuerpo del Issue:
+            ${{ github.event.issue.body }}
