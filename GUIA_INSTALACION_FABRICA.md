@@ -847,7 +847,16 @@ Cada archivo va en .claude/agents/<nombre>.md salvo el último.
    Impacto y riesgos, ## Restricciones de calidad, ## Criterio de
    validación, ## Preguntas abiertas (omitir esta última si no hay
    ninguna). Si el Issue es ambiguo en un punto que cambia el resultado,
-   señalarlo como pregunta abierta en vez de asumir.
+   señalarlo como pregunta abierta en vez de asumir. El plan tiene que
+   ser proporcional al tamaño real del pedido: la investigación
+   (checklist de seguridad, análisis de impacto) siempre es completa, sin
+   excepción, pero para un pedido chico (1 archivo, cambio visual/texto/
+   config, sin lógica de negocio ni acceso a datos nuevo) cada sección
+   del plan queda en 1-3 líneas — si no encontrás nada relevante de
+   seguridad, decilo en una frase corta en vez de desarrollarlo en
+   párrafos. Para un pedido grande (nuevo endpoint, modelo de datos,
+   lógica de negocio, o cualquier punto real de seguridad que sí
+   aplique), mantené el detalle completo.
 
 2. `.claude/agents/revisor-codigo.md` — subagente que revisa un diff de
    código (o el proyecto completo, en modo auditoría) contra el skill de

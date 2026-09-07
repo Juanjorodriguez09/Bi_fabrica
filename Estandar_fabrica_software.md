@@ -59,6 +59,18 @@ esto es genuinamente genérico, sin ningún contenido específico de
   **plantilla de forma**, y reescribir el contenido (ejemplos, checks
   específicos, convenciones referenciadas) para el proyecto destino —
   igual de qué se hace con `CLAUDE.md`, no como una copia de archivo.
+  **Regla de `planificador` que sí es estándar en todos los proyectos,
+  no a medida (agregada 2026-09-07, a pedido del jefe del usuario):** el
+  plan debe ser proporcional al tamaño real del pedido. La investigación
+  (checklist de seguridad, análisis de impacto) siempre se hace completa,
+  sin excepción — lo que se acorta es cuánto se escribe sobre lo que no
+  encontró nada relevante. Un pedido chico (1 archivo, cambio
+  visual/texto/config, sin lógica de negocio ni acceso a datos nuevo)
+  tiene cada sección del plan en 1-3 líneas; un pedido grande (nuevo
+  endpoint, modelo de datos, lógica de negocio, o cualquier punto real
+  de seguridad que aplique) mantiene el detalle completo de siempre. Ya
+  aplicado en `Bi_fabrica` y `WebChat_Fabrica` — cualquier `planificador`
+  nuevo debe incluir esta misma sección, con el mismo criterio de corte.
 - **Un subagente de dominio, si aplica** (`validador-metricas` en este
   repo) — es específico de este dashboard, no se reutiliza tal cual. Cada
   proyecto decide si necesita el suyo (para lógica de negocio/cálculos
