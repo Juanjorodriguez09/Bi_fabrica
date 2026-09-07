@@ -354,26 +354,25 @@ Telegram. Confirmado en vivo el 2026-08-31.
 
 `pm-diario.md` mantiene una **lista fija de repos** (ver 7.4 — no hay
 forma de descubrirla dinámicamente, se probó y no es posible). Para cada
-Issue/PR abierto de cada repo de la lista, lo ubica en una de 6
+Issue/PR abierto de cada repo de la lista, lo ubica en una de 5
 categorías por prioridad — Pausado esperando decisión humana / PR
 esperando revisión o merge / Pendiente de aprobar / Recién abierto sin
-plan / **Cierre administrativo pendiente** (Issue con PR ya mergeado,
-solo falta cerrarlo — distinto de "trabado de verdad", ver más abajo) /
-Estancado — más una sección de "Completado ayer". Publica siempre en
-**tres** canales (Issue fijo en `fabrica-status`, Telegram, y
+plan / Estancado — más una sección de "Completado ayer". Publica siempre
+en **tres** canales (Issue fijo en `fabrica-status`, Telegram, y
 `data/estado.json` en el repo público `fabrica-status-dashboard` que
 alimenta el dashboard visual — ver 7.6), incluso si algo falló, dejando
 el error explícito en vez de omitir en silencio. Nunca comenta en los
 repos de proyecto, solo lee de ahí.
 
-**Por qué existe "Cierre administrativo pendiente" aparte de
-"Estancado"** (agregado 2026-09-05, a pedido del jefe del usuario en la
-primera revisión del dashboard): un Issue con el PR ya mergeado, que solo
-le falta el clic de cerrarse, no está "trabado" en ningún sentido real —
-mezclarlo con Issues genuinamente sin resolución (esperando algo, sin
-actividad) le restaba precisión al reporte y hacía parecer más grave de
-lo que era. "Estancado" ahora significa específicamente eso: sin
-actividad hace más de 5 días Y sin un PR mergeado que lo resuelva.
+**Historial de "Cierre administrativo pendiente" como categoría propia**
+(agregada 2026-09-05, sacada 2026-09-07): se probó separar de "Estancado"
+los Issues con PR ya mergeado que solo faltaba cerrar, para no
+mezclarlos con Issues genuinamente sin resolución. Se sacó a los dos días
+porque el root cause real (la palabra clave de cierre en español, ver
+§3 paso 5) ya estaba corregido hacia adelante, y el usuario prefirió no
+mantener una categoría dedicada para un caso que no debería repetirse —
+si vuelve a aparecer, cae en "Estancado" sin categoría propia, sin
+ocultarse.
 
 ### 7.3 Sumar un proyecto nuevo al reporte — 3 pasos obligatorios, no 2
 
@@ -447,8 +446,10 @@ de descubrirlos por prueba y error otra vez.
   el reporte de texto/Telegram/Issue salió limpio, pero la escritura de
   `data/estado.json` vía Contents API falló (7.4.3, ya corregido a
   `git push`).
-- Pendiente: una corrida más para confirmar que el `git push` al repo del
-  dashboard funciona de punta a punta.
+- 2026-09-07: **confirmado en vivo que el `git push` al repo del
+  dashboard funciona de punta a punta** — tres commits reales de la
+  Routine (`2026-09-05` x2, `2026-09-07`) en `fabrica-status-dashboard`,
+  con datos frescos y correctos. Los tres canales quedan validados.
 
 ### 7.6 Dashboard visual (agregado 2026-09-05)
 
@@ -475,3 +476,15 @@ El JSON lo escribe `pm-diario.md` en cada corrida (ver 7.4.3 para el
 mecanismo de publicación). El dashboard no tiene backend ni build step —
 `index.html` hace `fetch("data/estado.json")` directo al abrir la
 página.
+
+**Historial por fecha (agregado 2026-09-07):** cada corrida hace su
+propio commit en `fabrica-status-dashboard`, así que el historial de git
+del repo ya es, de por sí, un snapshot diario — no hizo falta agregarle
+nada a `pm-diario.md` para tener esto. El selector "Ver fecha" del
+dashboard consulta en el navegador la API pública de commits de GitHub
+(`GET /repos/{owner}/{repo}/commits?path=data/estado.json`, sin
+autenticación — el repo es público, sujeto al rate limit no autenticado
+de GitHub, ~60 req/hora por IP, aceptable para uso personal esporádico) y
+cuando se elige una fecha anterior, trae el JSON de ese commit puntual
+vía `raw.githubusercontent.com/{owner}/{repo}/{sha}/data/estado.json`.
+Es solo frontend — no toca `pm-diario.md` ni ninguna credencial.
