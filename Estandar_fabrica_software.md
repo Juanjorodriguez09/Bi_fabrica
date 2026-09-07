@@ -31,6 +31,8 @@ esto es genuinamente genérico, sin ningún contenido específico de
 | `.github/workflows/ajustar-pr.yml` | Este repo — agregado 2026-08-25, portado desde `WebChat_Fabrica`. 100% genérico (usa `${{ github.repository }}` en todo, sin nada hardcodeado). Cierra el gap de que `revisar-pr.yml` solo reacciona a eventos de PR (`opened`/`synchronize`), nunca a un comentario humano: un comentario que empieza con `/ajustar <texto libre>` en un PR abierto dispara la misma Routine `corregir-hallazgos-pr` (reutiliza `ROUTINE_CORREGIR_ID`/`FIX_PR_ROUTINE_API_TOKEN`, sin secrets nuevos) |
 | `.github/workflows/continuar-plan-pausado.yml` | Este repo — agregado 2026-08-25, portado desde `WebChat_Fabrica`. 100% genérico. Complemento del mecanismo de "pausa y pregunta" de `implementar-plan-aprobado` (ver §3 paso 5): un comentario `/continuar <respuesta>` en un Issue con label `esperando-humano` puesta saca la label y vuelve a disparar la misma Routine `implementar-plan-aprobado`, que retoma la rama existente en vez de empezar de cero |
 | `.claude/skills/estandares-seguridad-fabrica/SKILL.md` | Este repo — genérico a propósito, no menciona nada de este dashboard. Cada proyecto nuevo lo interpreta una vez en su propio skill de calidad (marcando aplica/no aplica/gap por punto), como se hizo acá en `modelo-calidad-iso25010` §6 |
+| `.github/ISSUE_TEMPLATE/consulta-asesoria.yml` | Este repo — agregado 2026-09-07, a pedido del jefe del usuario. 100% genérico. Segundo tipo de Issue, distinto de "Solicitud de cambio": para pedidos de asesoría/recomendación que NO implican tocar código (label `consulta`, no `solicitud`) |
+| `.github/workflows/generar-asesoria.yml` | Este repo — agregado 2026-09-07. 100% genérico. Dispara al subagente `asesor` (ver §2) cuando se abre un Issue con la label `consulta` — respuesta única con análisis/recomendación, sin plan de desarrollo ni PR, sin ciclo de `/aprobar` |
 
 ## 1.1 Se copia, pero con referencias puntuales para ajustar
 
@@ -45,9 +47,10 @@ esto es genuinamente genérico, sin ningún contenido específico de
   (`planificador`, `revisor-codigo`, `documentador`) dependen de leerlo
   para conocer las convenciones reales del proyecto. Sin esto, la calidad
   del plan y de la revisión baja mucho.
-- **Los 4 subagentes de `.claude/agents/` (`planificador`, `revisor-codigo`,
-  `documentador`, `tester`) — CORRECCIÓN IMPORTANTE (2026-08-24): no son
-  copia tal cual, nunca lo fueron.** La versión anterior de este documento
+- **Los 5 subagentes de `.claude/agents/` (`planificador`, `revisor-codigo`,
+  `documentador`, `tester`, `asesor`) — CORRECCIÓN IMPORTANTE (2026-08-24): no son
+  copia tal cual, nunca lo fueron.** (`asesor` se sumó 2026-09-07, ver más
+  abajo, con el mismo criterio que los otros 4.) La versión anterior de este documento
   los tenía mal clasificados en §1. Se leyeron completos al armar
   `WebChat_Fabrica` y están escritos al 100% para el stack de
   `micomercio_bi_dashboard` (Prisma, Postgres, `siteId`,
@@ -71,6 +74,24 @@ esto es genuinamente genérico, sin ningún contenido específico de
   de seguridad que aplique) mantiene el detalle completo de siempre. Ya
   aplicado en `Bi_fabrica` y `WebChat_Fabrica` — cualquier `planificador`
   nuevo debe incluir esta misma sección, con el mismo criterio de corte.
+- **`asesor` (agregado 2026-09-07, a pedido del jefe del usuario)** —
+  subagente nuevo, de **solo lectura** (`tools: Read, Grep, Glob`, sin
+  Write/Edit/Bash), que responde Issues con la label `consulta` (plantilla
+  `consulta-asesoria.yml`): recomendaciones, evaluaciones o explicaciones
+  que NO implican escribir código. Nunca genera un plan de desarrollo ni
+  abre PR — si su conclusión es que hace falta un cambio real, lo dice
+  como recomendación final ("abrí una Solicitud de cambio para...") y
+  ahí termina su trabajo. Igual que los otros 4, se reescribe por
+  proyecto (contexto/stack real), pero la estructura (Respuesta corta /
+  Análisis / Consideraciones de seguridad / Próximos pasos) es estándar.
+- **Labels de esfuerzo `esfuerzo-chico`/`esfuerzo-grande` (agregado
+  2026-09-07)** — no es un subagente nuevo, es un paso agregado a
+  `generar-plan.yml`: después de publicar el comentario del plan, el
+  mismo job le pone al Issue la label que corresponda según la
+  clasificación que `planificador` ya determinó en su sección "Extensión
+  del plan" (ver arriba). El agente PM diario (§7) lee esa label del
+  mismo array `labels` que ya trae `gh api .../issues` — sin llamada
+  nueva a la API — y el dashboard la muestra como badge en cada tarjeta.
 - **Un subagente de dominio, si aplica** (`validador-metricas` en este
   repo) — es específico de este dashboard, no se reutiliza tal cual. Cada
   proyecto decide si necesita el suyo (para lógica de negocio/cálculos
@@ -98,12 +119,17 @@ En orden — cada paso depende del anterior:
 1. **Instalar la GitHub App "Claude Code"** (`github.com/apps/claude`) con
    scope solo al repo nuevo — no "All repositories". Sin esto, la action
    no puede comentar aunque el token esté bien.
-2. **Crear las labels `solicitud` y `esperando-humano`** en el repo,
-   manualmente (Settings → Labels). Los formularios de Issue *no* crean
-   `solicitud` solos aunque el YAML la declare — es un gotcha ya
-   confirmado, ver `[[feedback_gotchas_tecnicos_fabrica]]`.
-   `esperando-humano` la usa el mecanismo de "pausa y pregunta" (ver paso
-   5) — sin ella creada, `gh issue edit --add-label` falla.
+2. **Crear las labels `solicitud`, `esperando-humano`, `consulta`,
+   `esfuerzo-chico` y `esfuerzo-grande`** en el repo, manualmente
+   (Settings → Labels). Los formularios de Issue *no* crean sus labels
+   solos aunque el YAML las declare — es un gotcha ya confirmado, ver
+   `[[feedback_gotchas_tecnicos_fabrica]]`. `esperando-humano` la usa el
+   mecanismo de "pausa y pregunta" (ver paso 5); `consulta` la usa
+   `consulta-asesoria.yml`/`generar-asesoria.yml` (agregado 2026-09-07,
+   ver §2); `esfuerzo-chico`/`esfuerzo-grande` las pone `generar-plan.yml`
+   (agregado 2026-09-07, ver §2) — sin ellas creadas, los `gh issue edit
+   --add-label` correspondientes fallan (silenciosamente para las de
+   esfuerzo, por diseño — ver el prompt de `generar-plan.yml`).
 3. **Configurar el secret `CLAUDE_CODE_OAUTH_TOKEN`** (Settings → Secrets
    and variables → Actions → Secrets) — se genera con `claude setup-token`,
    consume cuota de suscripción Pro/Max, no facturación por token. Expira
