@@ -26,7 +26,7 @@ jobs:
           settings: |
             {
               "permissions": {
-                "allow": ["Bash(gh issue comment *)", "Write"]
+                "allow": ["Bash(gh issue comment *)", "Bash(gh issue edit *)", "Write"]
               }
             }
           prompt: |
@@ -79,6 +79,23 @@ jobs:
             `--body-file`, nunca partido en varias llamadas. Escribí el archivo
             completo con Write, revisalo vos mismo antes, y recién ahí ejecutá el
             comando una única vez.
+
+            Después de publicar el comentario, agregá al Issue la label de esfuerzo
+            que corresponda según lo que el subagente planificador determinó en su
+            sección "Extensión del plan" (pedido chico o grande):
+
+            ```
+            gh issue edit ${{ github.event.issue.number }} --add-label "esfuerzo-chico"
+            ```
+            o
+            ```
+            gh issue edit ${{ github.event.issue.number }} --add-label "esfuerzo-grande"
+            ```
+
+            Ejecutá solo UNA de las dos, la que corresponda. Si el comando falla
+            porque la label no existe en este repo, no lo intentes de nuevo ni falles
+            en silencio — está bien, la tarea ya se completó con el comentario del
+            plan publicado.
 
             Cuerpo del Issue:
             ${{ github.event.issue.body }}
