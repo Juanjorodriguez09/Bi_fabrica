@@ -179,7 +179,7 @@ jobs:
           settings: |
             {
               "permissions": {
-                "allow": ["Bash(gh issue comment *)", "Write"]
+                "allow": ["Bash(gh issue comment *)", "Bash(gh issue edit *)", "Write"]
               }
             }
           prompt: |
@@ -232,6 +232,23 @@ jobs:
             `--body-file`, nunca partido en varias llamadas. Escribí el archivo
             completo con Write, revisalo vos mismo antes, y recién ahí ejecutá el
             comando una única vez.
+
+            Después de publicar el comentario, agregá al Issue la label de esfuerzo
+            que corresponda según lo que el subagente planificador determinó en su
+            sección "Extensión del plan" (pedido chico o grande):
+
+            ```
+            gh issue edit ${{ github.event.issue.number }} --add-label "esfuerzo-chico"
+            ```
+            o
+            ```
+            gh issue edit ${{ github.event.issue.number }} --add-label "esfuerzo-grande"
+            ```
+
+            Ejecutá solo UNA de las dos, la que corresponda. Si el comando falla
+            porque la label no existe en este repo, no lo intentes de nuevo ni falles
+            en silencio — está bien, la tarea ya se completó con el comentario del
+            plan publicado.
 
             Cuerpo del Issue:
             ${{ github.event.issue.body }}
@@ -658,6 +675,128 @@ y lo interpreta en su propio skill de calidad.
   documentado todavía.
 ```
 
+### `.github/ISSUE_TEMPLATE/consulta-asesoria.yml`
+
+Segundo tipo de Issue, aparte de "Solicitud de cambio" — para pedidos de
+asesoría/recomendación que NO implican tocar código.
+
+```yaml
+name: Consulta o asesoría
+description: Pedí una recomendación, evaluación o explicación — no implica escribir código
+title: "[Consulta]: "
+labels: ["consulta"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Usá esto cuando necesitás una opinión, evaluación o explicación —
+        no un cambio de código. Por ejemplo: "¿conviene usar X o Y para
+        esto?", "¿esto que hicimos es seguro?", "¿por qué el endpoint Z se
+        comporta así?". Vas a recibir una respuesta única con el análisis
+        y una recomendación, sin plan de desarrollo ni `/aprobar` — si de
+        la respuesta surge que hace falta un cambio real, abrí después un
+        Issue de "Solicitud de cambio" aparte.
+
+  - type: textarea
+    id: pregunta
+    attributes:
+      label: Pregunta o tema
+      description: Qué necesitás que se evalúe, recomiende o explique.
+      placeholder: "Ej: ¿conviene mover el filtro de fechas al backend o dejarlo en el frontend como está ahora?"
+    validations:
+      required: true
+
+  - type: textarea
+    id: contexto
+    attributes:
+      label: Contexto (opcional)
+      description: Por qué surge esta duda, o cualquier antecedente relevante.
+    validations:
+      required: false
+```
+
+### `.github/workflows/generar-asesoria.yml`
+
+```yaml
+name: Responder consulta de asesoría
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+  issues: write
+  id-token: write
+
+jobs:
+  responder_asesoria:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verificar label "consulta"
+        id: check
+        run: |
+          HAS_LABEL=$(jq -r '.issue.labels | map(.name == "consulta") | any' "$GITHUB_EVENT_PATH")
+          echo "has_label=$HAS_LABEL" >> "$GITHUB_OUTPUT"
+
+      - name: 🚚 Checkout Code
+        if: steps.check.outputs.has_label == 'true'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: 💬 Asesor — responder la consulta
+        if: steps.check.outputs.has_label == 'true'
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          show_full_output: true
+          settings: |
+            {
+              "permissions": {
+                "allow": ["Bash(gh issue comment *)", "Write"]
+              }
+            }
+          prompt: |
+            Usa el subagente asesor definido en .claude/agents/asesor.md para
+            responder la siguiente consulta (Issue #${{ github.event.issue.number }}
+            de este repo, título: "${{ github.event.issue.title }}"), siguiendo el
+            formato de salida que ese subagente define.
+
+            Esto NO es una solicitud de cambio de código — es una consulta/pedido de
+            asesoría. NO generes un plan de desarrollo, NO escribas código, NO abras
+            rama ni Pull Request, bajo ninguna circunstancia, aunque la respuesta
+            implique que "convendría" hacer un cambio — en ese caso, decilo como
+            recomendación dentro de la respuesta, no lo implementes.
+
+            IMPORTANTE sobre cómo invocar al subagente: este es un job de GitHub
+            Actions de un solo turno, sin sesión interactiva después. Invocalo de
+            forma SÍNCRONA/bloqueante (NO en segundo plano, NO como tarea async) y
+            esperá su resultado completo antes de seguir.
+
+            El cuerpo completo del Issue ya está incluido abajo, tal cual. NO
+            ejecutes `gh issue view`, git, ni ningún otro comando para volver a
+            consultarlo.
+
+            Cuando el subagente asesor te devuelva la respuesta, tu ÚLTIMO paso
+            obligatorio es publicarla como comentario en este mismo Issue:
+
+            ```
+            gh issue comment ${{ github.event.issue.number }} --body-file <ruta-a-un-archivo-temporal-con-la-respuesta>
+            ```
+
+            (escribí la respuesta a un archivo temporal con Write antes de correr
+            ese comando). Ningún otro comando de Bash está autorizado. La tarea no
+            está completa hasta que el comentario quede publicado.
+
+            CRÍTICO: ejecutá `gh issue comment` **exactamente una sola vez, con la
+            respuesta completa ya terminada** — no hay forma de "probar en seco",
+            cada ejecución publica un comentario real y visible.
+
+            Cuerpo del Issue:
+            ${{ github.event.issue.body }}
+```
+
 ## A.2 Copiar este archivo con 2 líneas a ajustar
 
 ### `.github/workflows/revisar-pr.yml`
@@ -815,7 +954,7 @@ jobs:
 
 ## A.3 Escribir estos archivos a medida (no se copian tal cual)
 
-Estos 5 archivos **dependen del stack real de tu proyecto** — no existe
+Estos 6 archivos **dependen del stack real de tu proyecto** — no existe
 una versión genérica que sirva para cualquier repo. Lo que sí es
 reutilizable es la estructura/formato de cada uno. La forma más rápida y
 confiable de escribirlos bien es pedírselo a Claude Code directamente,
@@ -826,7 +965,7 @@ Abrí una sesión de Claude Code en la raíz de tu repo (ya con `CLAUDE.md`
 escrito, paso A.0) y pegale este prompt completo:
 
 ```
-Necesito que crees 5 archivos para armar la "fábrica de software" en este
+Necesito que crees 6 archivos para armar la "fábrica de software" en este
 repo. Antes de escribir nada, leé CLAUDE.md completo y explorá la
 estructura real del código (carpetas principales, cómo está organizado).
 Cada archivo va en .claude/agents/<nombre>.md salvo el último.
@@ -902,7 +1041,22 @@ Cada archivo va en .claude/agents/<nombre>.md salvo el último.
    código que leíste — no genérica. Sé honesto sobre los gaps reales que
    encuentres, no asumas que todo está bien.
 
-Para los 5 archivos: no inventes convenciones que no viste en el código
+6. `.claude/agents/asesor.md` — subagente de **solo lectura** (nunca
+   escribe ni modifica código, nunca abre rama ni PR) que responde
+   consultas/pedidos de asesoría — Issues con la label `consulta`
+   (plantilla consulta-asesoria.yml), distintos de una solicitud de
+   cambio. Investiga el código real y responde con evidencia concreta
+   (archivo:línea), apoyándose en CLAUDE.md y en los mismos skills del
+   ítem 5. Si su conclusión es que hace falta un cambio de código real,
+   lo dice como recomendación final ("recomiendo abrir una Solicitud de
+   cambio para...") y ahí termina — NUNCA redacta un plan de desarrollo
+   ni lo implementa. Formato de salida: ## Respuesta corta (1-3 líneas),
+   ## Análisis (razonamiento con evidencia), ## Consideraciones de
+   seguridad (solo si aplica algún punto del checklist de 20), ##
+   Próximos pasos (solo si de verdad hace falta un cambio de código;
+   omitir si no).
+
+Para los 6 archivos: no inventes convenciones que no viste en el código
 o en CLAUDE.md. Si un subagente de dominio tiene sentido para este
 proyecto (lógica de negocio/cálculos particulares que ameriten su propio
 revisor), decímelo antes de crear nada — no lo agregues sin preguntar.
@@ -910,7 +1064,7 @@ revisor), decímelo antes de crear nada — no lo agregues sin preguntar.
 
 Revisá lo que te devuelva antes de aceptarlo — es un punto de partida de
 buena calidad, no algo para aprobar a ciegas. Si Claude Code te pregunta
-por un subagente de dominio y decís que sí, va a crear un sexto archivo
+por un subagente de dominio y decís que sí, va a crear un séptimo archivo
 (`.claude/agents/<nombre>.md`) — anotá su nombre, lo vas a necesitar en
 el ajuste 1 de A.2.
 
@@ -923,12 +1077,16 @@ Hacé estos pasos **en este orden** — cada uno depende del anterior.
 y marcá tu repo (nunca "All repositories"). Sin esto, nada de lo que
 sigue puede comentar en tu repo aunque el resto esté bien configurado.
 
-**2. Crear las labels `solicitud` y `esperando-humano`**
-En tu repo: Settings → Labels → New label. Creá las dos, exactamente con
-esos nombres (minúsculas, tal cual). El formulario de Issue (`solicitud-cambio.yml`,
-A.1) declara la label `solicitud` pero GitHub **no la crea sola** — es un
-paso manual obligatorio o el workflow `disparar-routine.yml` nunca va a
-encontrar la label.
+**2. Crear las labels `solicitud`, `esperando-humano`, `consulta`,
+`esfuerzo-chico` y `esfuerzo-grande`**
+En tu repo: Settings → Labels → New label. Creá las cinco, exactamente
+con esos nombres (minúsculas, tal cual). Los formularios de Issue
+declaran sus labels pero GitHub **no las crea solo** — es un paso manual
+obligatorio: sin `solicitud`, el workflow `disparar-routine.yml` nunca la
+encuentra; sin `consulta`, `generar-asesoria.yml` nunca dispara; sin las
+dos de esfuerzo, el paso que las agrega en `generar-plan.yml` simplemente
+falla en silencio (no rompe nada más, pero te quedás sin el dato en el
+dashboard).
 
 **3. Generar y guardar `CLAUDE_CODE_OAUTH_TOKEN`**
 Con el CLI de Claude Code instalado localmente, corré:
@@ -1228,7 +1386,7 @@ no en este checkout):
       "nombre": "repo-1",
       "categorias": {
         "pausado_esperando_decision": [
-          {"numero": 25, "tipo": "issue", "titulo": "...", "url": "https://github.com/...", "motivo": "...", "ultima_actividad": "2026-01-01"}
+          {"numero": 25, "tipo": "issue", "titulo": "...", "url": "https://github.com/...", "motivo": "...", "ultima_actividad": "2026-01-01", "esfuerzo": "chico"}
         ],
         "pr_esperando_revision_merge": [],
         "pendiente_de_aprobar": [],
@@ -1245,7 +1403,11 @@ no en este checkout):
 `tipo` es `"issue"` o `"pr"`. `url` es el link directo
 (`https://github.com/<owner>/<repo>/issues/<numero>` o `.../pull/<numero>`).
 `motivo` es la misma frase corta que ya escribiste en el texto para ese
-ítem.
+ítem. `esfuerzo` es `"chico"` o `"grande"` si el ítem tiene la label
+`esfuerzo-chico`/`esfuerzo-grande` (la pone `generar-plan.yml`, ver A.4)
+— ya viene en el mismo array `labels` de `gh api .../issues` que ya
+estás leyendo, no hace falta una llamada nueva; si no tiene ninguna de
+las dos labels, omití la clave o dejala en `null`.
 
 **Publicalo con `git push`, no con la Contents API de GitHub — el
 proxy de la sesión bloquea las escrituras vía API REST/GraphQL casi por
