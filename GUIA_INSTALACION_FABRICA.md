@@ -778,9 +778,14 @@ jobs:
             recomendación dentro de la respuesta, no lo implementes.
 
             IMPORTANTE sobre cómo invocar al subagente: este es un job de GitHub
-            Actions de un solo turno, sin sesión interactiva después. Invocalo de
+            Actions de un solo turno, sin sesión interactiva después — NO existe un
+            "más tarde" en el que puedas continuar. Invoca al subagente asesor de
             forma SÍNCRONA/bloqueante (NO en segundo plano, NO como tarea async) y
-            esperá su resultado completo antes de seguir.
+            espera su resultado completo dentro de este mismo turno antes de seguir.
+            Si lo lanzas en segundo plano y terminas tu turno diciendo "voy a esperar
+            su respuesta" o "seguirá en background", el job se completa igual y la
+            respuesta nunca se genera ni se publica — eso ya pasó una vez y es
+            exactamente lo que no debes repetir.
 
             El cuerpo completo del Issue ya está incluido abajo, tal cual. NO
             ejecutes `gh issue view`, git, ni ningún otro comando para volver a
