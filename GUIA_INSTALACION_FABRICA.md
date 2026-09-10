@@ -166,12 +166,20 @@ jobs:
   generar_plan:
     runs-on: ubuntu-latest
     steps:
+      - name: Verificar label "solicitud"
+        id: check
+        run: |
+          HAS_LABEL=$(jq -r '.issue.labels | map(.name == "solicitud") | any' "$GITHUB_EVENT_PATH")
+          echo "has_label=$HAS_LABEL" >> "$GITHUB_OUTPUT"
+
       - name: 🚚 Checkout Code
+        if: steps.check.outputs.has_label == 'true'
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
 
       - name: 🧠 Planificador — generar plan estructurado
+        if: steps.check.outputs.has_label == 'true'
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
