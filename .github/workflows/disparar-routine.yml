@@ -12,7 +12,7 @@ jobs:
   disparar_routine:
     if: >
       github.event.issue.pull_request == null &&
-      contains(fromJSON('["OWNER","COLLABORATOR","MEMBER"]'), github.event.comment.author_association) &&
+      (contains(fromJSON('["OWNER","COLLABORATOR","MEMBER"]'), github.event.comment.author_association) || github.event.comment.user.type == 'Bot') &&
       (github.event.comment.body == '/aprobar' || startsWith(github.event.comment.body, '/aprobar'))
     runs-on: ubuntu-latest
     steps:

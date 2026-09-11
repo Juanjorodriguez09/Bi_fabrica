@@ -1,0 +1,96 @@
+name: Coordinador — revisar y aprobar plan
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: write
+  id-token: write
+
+jobs:
+  coordinador_revisar_plan:
+    if: >
+      github.event.issue.pull_request == null &&
+      github.event.comment.user.type == 'Bot' &&
+      contains(github.event.comment.body, '## Objetivo') &&
+      !startsWith(github.event.comment.body, '/aprobar')
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🚚 Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Traer el hilo completo del Issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue view ${{ github.event.issue.number }} --repo ${{ github.repository }} \
+            --json title,body,comments > issue-thread.json
+          echo "Comentarios en el hilo: $(jq '.comments | length' issue-thread.json)"
+
+      - name: 🧭 Coordinador — decidir aprobación
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          show_full_output: true
+          settings: |
+            {
+              "permissions": {
+                "allow": ["Bash(gh issue comment *)", "Write"]
+              }
+            }
+          prompt: |
+            Usa el subagente coordinador definido en .claude/agents/coordinador.md
+            para revisar el plan de desarrollo más reciente del Issue #${{ github.event.issue.number }}
+            de este repo (${{ github.repository }}) y decidir si aprobarlo,
+            resolviendo vos mismo cualquier pregunta abierta que tenga — sin dejar
+            nada pendiente para que lo responda un humano.
+
+            El hilo completo (título, cuerpo del Issue, y todos los comentarios en
+            orden cronológico, incluido el plan más reciente) ya está en el archivo
+            issue-thread.json, en la raíz de este checkout — léelo con la
+            herramienta Read. NO ejecutes `gh issue view`, git, ni ningún otro
+            comando para volver a consultarlo.
+
+            IMPORTANTE sobre cómo invocar al subagente: este es un job de GitHub
+            Actions de un solo turno, sin sesión interactiva después — NO existe un
+            "más tarde" en el que puedas continuar. Invoca al subagente coordinador
+            de forma SÍNCRONA/bloqueante (NO en segundo plano, NO como tarea async) y
+            espera su resultado completo dentro de este mismo turno antes de seguir.
+            Si lo lanzas en segundo plano y terminas tu turno diciendo "voy a esperar
+            su respuesta" o "seguirá en background", el job se completa igual y la
+            aprobación nunca se publica — eso ya pasó con otro subagente parecido de
+            este mismo repo y es exactamente lo que no debes repetir.
+
+            Cuando el subagente coordinador te devuelva su decisión, tu ÚLTIMO paso
+            obligatorio es publicarla como comentario en este mismo Issue — con el
+            contenido que te devolvió el subagente, pero agregando SIEMPRE la palabra
+            `/aprobar` sola, en su propia primera línea, ANTES del resto del texto.
+            Es lo que dispara la implementación real (`disparar-routine.yml` busca
+            comentarios que empiecen con `/aprobar`) — nunca publiques el comentario
+            de este workflow sin que arranque exactamente así:
+
+            ```
+            /aprobar
+
+            Resolución de preguntas abiertas:
+            - ...
+            ```
+
+            Publicalo con:
+
+            ```
+            gh issue comment ${{ github.event.issue.number }} --body-file <ruta-a-un-archivo-temporal>
+            ```
+
+            (escribí el contenido completo a un archivo temporal con Write antes de
+            correr ese comando). Ningún otro comando de Bash está autorizado. La
+            tarea no está completa hasta que el comentario quede publicado.
+
+            CRÍTICO: ejecutá `gh issue comment` **exactamente una sola vez, con el
+            contenido completo ya terminado** — no hay forma de "probar en seco",
+            cada ejecución publica un comentario real y visible, y dispara la
+            implementación de verdad.
