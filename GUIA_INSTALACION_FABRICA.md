@@ -1551,12 +1551,298 @@ Tres pasos, siempre los tres:
 
 ---
 
+# PARTE C — Coordinador central (una sola vez, toda la cuenta)
+
+Reduce la intervención humana un paso más allá de la Parte A: en vez de
+que vos apruebes cada plan y respondas sus preguntas abiertas a mano, el
+Coordinador lo hace solo — nunca deja un plan sin resolver, nunca pausa
+esperando a un humano. Se instala **una sola vez**, igual que la Parte
+B, y cubre todos los proyectos que le vayas conectando.
+
+**Dónde termina su autonomía, a propósito:** el Coordinador llega hasta
+"PR abierto y revisado, listo para mergear" — el merge a la rama
+principal sigue siendo tu clic. No es una limitación técnica, es la
+misma regla de todo este sistema ("el merge es siempre humano") aplicada
+acá también.
+
+## C.1 Qué se crea
+
+- **En el repo hub** (el mismo de la Parte B):
+  - `.claude/agents/coordinador.md` — el criterio de decisión.
+  - `.claude/conocimiento/decisiones.md` — un registro liviano (texto en
+    git) de decisiones no triviales, compartido entre todos los
+    proyectos, para no resolver dos veces distinto la misma pregunta de
+    fondo. Podés migrarlo a una base de datos real más adelante sin que
+    nada dependa de eso ahora.
+- **Un cuarto PAT** (fine-grained), `GH_TOKEN_COORDINADOR`: `Issues:
+  Read and write` + `Contents: Read-only` sobre los repos de proyecto —
+  distinto de `GH_TOKEN_FABRICA` (que es solo lectura). 1 año de
+  expiración, igual que los demás.
+- **Una Routine nueva**, `coordinador-central`, en el repo hub:
+  - Trigger: **"Add an API trigger"** (no horario).
+  - Repos conectados: el repo hub + cada repo de proyecto.
+  - Instrucciones:
+    ```
+    Ejecutá de forma síncrona (no delegues a un subagente en background) las
+    instrucciones de .claude/agents/coordinador.md en este mismo repo, usando
+    el payload recibido para saber en qué repo y qué Issue tenés que revisar.
+    ```
+- **En cada repo de proyecto de la Parte A**: un workflow chico que
+  avisa, más dos valores de configuración, más un cambio a
+  `disparar-routine.yml`, más un paso nuevo en la Routine
+  `implementar-plan-aprobado` — ver C.3.
+
+## C.2 `.claude/agents/coordinador.md` (repo hub)
+
+```markdown
+---
+name: coordinador
+description: Revisa el plan de desarrollo más reciente de un Issue de cualquier proyecto de la fábrica y decide, con criterio propio, si aprobarlo o cómo resolver sus preguntas abiertas antes de aprobar. Reemplaza la intervención humana en la aprobación de planes — nunca deja el plan sin resolver ni pausa esperando a un humano. Se ejecuta una vez por Issue, disparado por la Routine coordinador-central vía /fire, nunca a demanda dentro de un repo de proyecto.
+tools: Read, Grep, Glob, Bash
+---
+
+Eres el Coordinador central de la fábrica de software — el mismo criterio
+de decisión aplica a todos los proyectos, no uno distinto por repo. Tu
+trabajo es decidir, con la misma responsabilidad que tendría un humano
+con contexto completo, si el plan de desarrollo de un Issue está listo
+para aprobarse — y si tiene preguntas abiertas, resolverlas vos mismo con
+el mejor criterio posible, sin dejar nada pendiente para un humano.
+
+## Regla general: siempre REST (`gh api`), nunca `gh repo list` / `gh issue list` / `gh pr list`
+
+Esta sesión de Routine bloquea casi todo GraphQL — esos tres comandos de
+`gh` fallan siempre acá. Usá siempre `gh api` (REST puro) o
+`gh issue view`/`gh issue comment` (que sí son REST) para todo lo que
+sigue.
+
+## De qué repo/Issue se trata
+
+El payload que te invoca menciona el repo (`<owner>/<repo>`) y el número
+de Issue a revisar — nunca asumas que es este mismo repo (el hub no
+tiene Issues de proyecto).
+
+## Credenciales disponibles en el entorno
+
+- `GH_TOKEN_COORDINADOR` — lectura/escritura de Issues y **lectura** de
+  Contents sobre los repos de proyecto de la fábrica. Usalo para todo lo
+  de este archivo.
+
+`gh` toma el token de la variable de entorno `GH_TOKEN` — seteala por
+comando: `GH_TOKEN="$GH_TOKEN_COORDINADOR" gh ...`.
+
+## Cómo investigar el repo del Issue
+
+Este checkout es el del repo hub, no el del proyecto — para leer
+`CLAUDE.md`, los skills, y el código real que necesitás para resolver
+preguntas técnicas, cloná el repo del Issue a un directorio temporal:
+
+```bash
+rm -rf /tmp/repo-revisar
+GH_TOKEN="$GH_TOKEN_COORDINADOR" git clone "https://x-access-token:${GH_TOKEN_COORDINADOR}@github.com/<owner>/<repo>.git" /tmp/repo-revisar
+```
+
+Ahí adentro vas a encontrar `CLAUDE.md`, `.claude/skills/`, y el código
+real — leelos con Read/Grep/Glob igual que si fuera un checkout normal.
+
+## Traer el hilo del Issue
+
+```bash
+GH_TOKEN="$GH_TOKEN_COORDINADOR" gh issue view <numero> --repo <owner>/<repo> --json title,body,comments
+```
+
+## Contexto que debés leer siempre, antes de decidir
+
+1. `CLAUDE.md` del repo clonado.
+2. Los skills de calidad y de seguridad del repo clonado.
+3. `.claude/conocimiento/decisiones.md`, **en este mismo repo** (el hub,
+   no el clonado) — decisiones anteriores del Coordinador sobre casos
+   parecidos, de cualquier proyecto.
+4. El hilo completo del Issue — el plan del planificador, con su
+   sección "Preguntas abiertas" si la tiene.
+5. El código real relevante a cada pregunta abierta.
+
+## Cómo decidir
+
+Para cada pregunta abierta del plan:
+
+- Si la respuesta se puede derivar con evidencia real del código, del
+  `CLAUDE.md`, de un skill, o de una decisión anterior en
+  `decisiones.md` — respondela así, citando la evidencia (archivo:línea
+  cuando aplique).
+- Si es una decisión de producto/negocio sin una respuesta "correcta"
+  objetiva — elegí la opción más conservadora y más consistente con
+  patrones ya existentes en el proyecto, y decilo explícitamente así.
+- Nunca dejes una pregunta sin resolver. Tu turno siempre termina en una
+  decisión, no en otra pregunta ni en una pausa.
+
+Si el plan no tiene preguntas abiertas y el alcance es razonable,
+aprobalo directo, sin inventar objeciones que el plan no plantea.
+
+## Qué NO hacer
+
+- No pauses ni dejes la decisión para un humano.
+- No escribas código ni modifiques el repo del proyecto — tu única
+  salida es el comentario de decisión.
+- No inventes alcance nuevo que ni el Issue ni el plan pidieron.
+- No comentes en ningún repo que no sea el mencionado en el payload que
+  te invocó.
+
+## Publicar la decisión
+
+```
+/aprobar
+
+Resolución de preguntas abiertas:
+- <pregunta 1>: <respuesta y por qué>
+
+Plan aprobado con estas resoluciones.
+```
+
+(O, si no había preguntas abiertas, un texto breve confirmando que se
+revisó sin objeciones — siempre empezando la primera línea con
+`/aprobar`.)
+
+```bash
+GH_TOKEN="$GH_TOKEN_COORDINADOR" gh issue comment <numero> --repo <owner>/<repo> --body-file /tmp/decision.txt
+```
+
+## Registrar la decisión (si fue relevante)
+
+Si resolviste al menos una pregunta abierta no trivial, agregá una
+entrada corta a `.claude/conocimiento/decisiones.md` (en este repo, el
+hub) con el formato que ya tiene el archivo, y commiteala:
+
+```bash
+git add .claude/conocimiento/decisiones.md
+git commit -m "Registrar decisión del Coordinador — <owner>/<repo> #<numero>"
+git push
+```
+
+Si el plan no tenía preguntas abiertas, no hace falta registrar nada.
+```
+
+Y `.claude/conocimiento/decisiones.md` (semilla, mismo repo hub):
+
+```markdown
+# Decisiones del Coordinador
+
+Registro compartido entre todos los proyectos de la fábrica — decisiones
+no triviales que tomó el `coordinador` al aprobar planes. Versión
+liviana (texto en git); migrable a una base de datos real más adelante.
+
+## <fecha> — <owner>/<repo> Issue #<n>: <resumen de la pregunta>
+
+Decisión: <qué se resolvió y por qué>
+
+Todavía sin entradas.
+```
+
+## C.3 En cada repo de proyecto
+
+### `.github/workflows/coordinador-avisar-plan.yml`
+
+```yaml
+name: Avisar al Coordinador central de un plan nuevo
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  avisar_coordinador:
+    if: >
+      github.event.issue.pull_request == null &&
+      github.event.comment.user.type == 'Bot' &&
+      contains(github.event.comment.body, '## Objetivo') &&
+      !startsWith(github.event.comment.body, '/aprobar')
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🧭 Avisar al Coordinador central vía API
+        run: |
+          RESPONSE=$(curl -s -X POST "https://api.anthropic.com/v1/claude_code/routines/${{ vars.ROUTINE_COORDINADOR_ID }}/fire" \
+            -H "Authorization: Bearer ${{ secrets.COORDINADOR_API_TOKEN }}" \
+            -H "anthropic-beta: experimental-cc-routine-2026-04-01" \
+            -H "anthropic-version: 2023-06-01" \
+            -H "Content-Type: application/json" \
+            -d "{\"text\": \"Hay un plan nuevo para revisar en el Issue #${{ github.event.issue.number }} de ${{ github.repository }}. Repo completo: ${{ github.repository }}. Revisalo y decidí si aprobarlo, resolviendo cualquier pregunta abierta que tenga.\"}")
+          echo "$RESPONSE"
+```
+
+### Modificar `disparar-routine.yml` (ya existe, de la Parte A)
+
+Cambiá la condición del job para que también acepte un `/aprobar`
+posteado por una identidad bot, no solo por vos:
+
+```diff
+- contains(fromJSON('["OWNER","COLLABORATOR","MEMBER"]'), github.event.comment.author_association) &&
++ (contains(fromJSON('["OWNER","COLLABORATOR","MEMBER"]'), github.event.comment.author_association) || github.event.comment.user.type == 'Bot') &&
+```
+
+### Agregar el paso 4.5 a `implementar-plan-aprobado`
+
+En las instrucciones de esa Routine (editar en la UI), insertá este
+paso entre el 4 y el 5 existentes:
+
+```
+4.5. Si el plan aprobado concluye que NO hace falta ningún cambio de
+   código (por ejemplo, la funcionalidad ya existe, o el Issue es un
+   duplicado ya resuelto en otro Issue/PR) — no sigas a los pasos 5-9,
+   no crees rama ni PR. No dejes esa decisión para que la tome un
+   humano: cerrá el Issue vos mismo con `gh issue close <numero>
+   --comment "<explicación breve, citando la evidencia concreta de por
+   qué no hace falta desarrollo>"`. Terminá el turno ahí.
+```
+
+Sin este paso, la Routine solo *dice* que habría que cerrar el Issue
+pero lo deja abierto — un punto de intervención humana sin cubrir.
+
+## C.4 Checklist de configuración
+
+1. Crear `GH_TOKEN_COORDINADOR` (fine-grained): repos de proyecto,
+   `Issues: Read and write` + `Contents: Read-only`, 1 año.
+2. Crear la Routine `coordinador-central` en el repo hub, con el
+   Environment ya usado en la Parte B (agregale la variable
+   `GH_TOKEN_COORDINADOR` ahí) y los repos de proyecto conectados.
+3. Guardar el token de la Routine (se muestra una sola vez).
+4. En cada repo de proyecto: agregar los dos archivos de C.3, el secret
+   `COORDINADOR_API_TOKEN` (pestaña **Secrets**) y la variable
+   `ROUTINE_COORDINADOR_ID` (pestaña **Variables** — son pestañas
+   distintas; si los ponés en la equivocada, el `curl` del workflow
+   falla con exit code 43, sin mensaje de error claro).
+5. Agregar el paso 4.5 a `implementar-plan-aprobado` en cada repo.
+
+## C.5 Probar
+
+Abrí un Issue chico de Solicitud de cambio y **no comentes nada** — el
+plan debería publicarse, y sin que hagas nada más, un comentario que
+empiece con `/aprobar` debería aparecer solo, seguido de un PR abierto y
+revisado (o, si resulta que no hacía falta ningún cambio, el Issue se
+cierra solo con la explicación).
+
+## C.6 Sumar un proyecto nuevo al Coordinador
+
+Cinco pasos, todos en el repo nuevo (además de tenerlo ya instalado con
+la Parte A):
+1. Agregar el repo al scope del PAT `GH_TOKEN_COORDINADOR`.
+2. Conectarlo a la Routine `coordinador-central` (botón `+`).
+3. Copiar `coordinador-avisar-plan.yml` (C.3) tal cual.
+4. Aplicar el mismo diff a `disparar-routine.yml` del repo nuevo.
+5. Agregar los secrets/vars y el paso 4.5, igual que en C.4.
+
+---
+
 # Qué NO es parte de este sistema (a propósito)
 
 - **El deploy a servidor** — cada proyecto tiene su propio destino de
   despliegue o ninguno; no es parte de este patrón.
-- **El merge a la rama principal** — siempre manual, sin excepción. No
-  hay ninguna configuración acá que lo automatice.
+- **El merge a la rama principal** — siempre manual, sin excepción,
+  incluso con el Coordinador de la Parte C instalado — llega hasta "PR
+  listo", nunca lo mergea él. No hay ninguna configuración acá que lo
+  automatice.
 - **Confirmación de que funciona en cuentas distintas de la original**
   — este documento está escrito para que sea portable a cualquier cuenta
   (nada asume una cuenta específica), pero la validación en vivo
