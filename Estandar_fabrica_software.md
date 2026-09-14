@@ -206,6 +206,20 @@ En orden — cada paso depende del anterior:
    `403` (visible, avisa); sin agregarlo a la lista de `pm-diario.md`, el
    reporte simplemente no lo menciona (silencioso, no avisa) — por eso el
    orden de este ítem no importa, pero hacer los dos sí.
+10. **Conectar el repo nuevo al Coordinador central** (agregado
+    2026-09-14, ver §8) — mismo tipo de paso manual que el anterior, con
+    piezas propias del repo nuevo, no solo de conexión:
+    - Agregar el repo al scope del PAT `GH_TOKEN_COORDINADOR`.
+    - Conectar el repo como fuente adicional de la Routine
+      `coordinador-central` (mismo límite de plataforma que el punto 9).
+    - Copiar `.github/workflows/coordinador-avisar-plan.yml` al repo
+      nuevo (genérico, sin nada específico del proyecto).
+    - Aplicar el mismo diff a `disparar-routine.yml` del repo nuevo (ver
+      §8.1) para que acepte un `/aprobar` posteado por un bot.
+    - Agregar los secrets/vars `COORDINADOR_API_TOKEN` (Secret) y
+      `ROUTINE_COORDINADOR_ID` (Variable) — pestañas distintas, ver §8.4.
+    - Agregar el paso 4.5 a las instrucciones de la Routine
+      `implementar-plan-aprobado` de este repo (ver §8.1).
 
 ## 3.1 Si el proyecto nuevo está en otra cuenta/organización de GitHub
 
@@ -526,3 +540,146 @@ de GitHub, ~60 req/hora por IP, aceptable para uso personal esporádico) y
 cuando se elige una fecha anterior, trae el JSON de ese commit puntual
 vía `raw.githubusercontent.com/{owner}/{repo}/{sha}/data/estado.json`.
 Es solo frontend — no toca `pm-diario.md` ni ninguna credencial.
+
+## 8. Coordinador central — aprueba/retroalimenta planes solo, sin humano
+
+A pedido del jefe del usuario (2026-09-10/11): tras ver la fábrica
+funcionando, pidió reducir la intervención humana a solo el aviso final,
+en vez de tener que aprobar cada plan y responder sus preguntas abiertas
+a mano. El Coordinador reemplaza ese punto de intervención — nunca deja
+un plan sin resolver, nunca pausa esperando a un humano.
+
+**Igual que §7 (una sola vez para toda la fábrica, no por proyecto).**
+Primer intento: se piloteó por-repo en `Bi_fabrica` (mismo patrón que
+`revisar-pr.yml`), pero el usuario aclaró que lo quería **central**, un
+solo Coordinador para todos los proyectos — mismo criterio que
+`pm-diario`. La versión final, la que se documenta acá, ya es la
+centralizada. **Confirmado en vivo el 2026-09-14, en los dos repos**
+(`Bi_fabrica` Issue #36 — caso sin código; `WebChat_Fabrica` Issue #22 →
+PR #23 — caso con código real).
+
+### 8.1 Qué se crea
+
+- **En el repo hub** (`fabrica-status`, el mismo de §7):
+  - `.claude/agents/coordinador.md` — el criterio de decisión, genérico
+    para cualquier proyecto: clona el repo del Issue a revisar (con
+    `git clone` + token, no con la Contents API — mismo motivo que 7.4.3),
+    lee su `CLAUDE.md`/skills, decide, comenta la aprobación.
+  - `.claude/conocimiento/decisiones.md` — base de conocimiento
+    **compartida entre todos los proyectos** (no una por repo): registro
+    liviano en texto/git de decisiones no triviales, para no responder
+    dos veces distinto la misma pregunta de fondo. Pensada para migrar a
+    una base de datos real más adelante (el jefe ofreció un cPanel) — no
+    bloquea nada mientras tanto.
+- **Un PAT nuevo, `GH_TOKEN_COORDINADOR`** (fine-grained): `Issues: Read
+  and write` + `Contents: Read-only` sobre los repos de proyecto —
+  distinto de `GH_TOKEN_FABRICA` (que es solo lectura) y de
+  `GH_TOKEN_STATUS`/`GH_TOKEN_DASHBOARD` (que son de otro repo), mismo
+  criterio de mínimo privilegio de siempre.
+- **Una Routine nueva, `coordinador-central`**, en `fabrica-status`, con:
+  - Trigger: **"Add an API trigger"** (no horario) — se dispara cuando
+    un repo de proyecto avisa que hay un plan nuevo.
+  - Repos conectados: el repo hub + cada repo de proyecto (mismo límite
+    de plataforma que ya se explica en 7.3/7.4 — sin conectar el repo,
+    la sesión no puede llamar a su API aunque el token sí tenga acceso).
+  - Instrucciones:
+    ```
+    Ejecutá de forma síncrona (no delegues a un subagente en background) las
+    instrucciones de .claude/agents/coordinador.md en este mismo repo, usando
+    el payload recibido para saber en qué repo y qué Issue tenés que revisar.
+    ```
+- **En cada repo de proyecto**, dos piezas nuevas y una modificación a
+  un workflow ya existente:
+  - `.github/workflows/coordinador-avisar-plan.yml` — workflow chico,
+    dispara sobre el mismo evento que detecta un plan nuevo (comentario
+    bot con `## Objetivo`, no `/aprobar`) y solo llama `/fire` a la
+    Routine central — no razona nada localmente, mismo patrón que
+    `disparar-routine.yml`.
+  - Dos secrets/vars nuevos: `COORDINADOR_API_TOKEN` (Secret) y
+    `ROUTINE_COORDINADOR_ID` (Variable) — **ojo, son dos pestañas
+    distintas** en Settings → Secrets and variables → Actions, ver 8.4.
+  - `.github/workflows/disparar-routine.yml` **modificado** (no es un
+    archivo nuevo, es un cambio a uno ya compartido): la condición de
+    disparo ahora también acepta un `/aprobar` posteado por una
+    identidad bot, no solo por un humano OWNER/COLLABORATOR/MEMBER:
+    ```diff
+    - contains(fromJSON('["OWNER","COLLABORATOR","MEMBER"]'), github.event.comment.author_association) &&
+    + (contains(fromJSON('["OWNER","COLLABORATOR","MEMBER"]'), github.event.comment.author_association) || github.event.comment.user.type == 'Bot') &&
+    ```
+- **La Routine `implementar-plan-aprobado` de cada proyecto, con un paso
+  nuevo (4.5) agregado a sus instrucciones** (se edita directo en la UI
+  de la Routine, no es un archivo de repo):
+  ```
+  4.5. Si el plan aprobado concluye que NO hace falta ningún cambio de
+     código (por ejemplo, la funcionalidad ya existe, o el Issue es un
+     duplicado ya resuelto en otro Issue/PR) — no sigas a los pasos 5-9,
+     no crees rama ni PR. No dejes esa decisión para que la tome un
+     humano: cerrá el Issue vos mismo con `gh issue close <numero>
+     --comment "<explicación breve, citando la evidencia concreta de por
+     qué no hace falta desarrollo>"`. Terminá el turno ahí.
+  ```
+  Sin este paso, la Routine solo *decía* que había que cerrar el Issue
+  pero lo dejaba abierto — un punto de intervención humana que había
+  quedado sin cubrir (encontrado en vivo con el Issue #36 de prueba).
+
+### 8.2 Cómo decide
+
+Para cada pregunta abierta del plan: si se puede derivar de evidencia
+real (código, `CLAUDE.md`, un skill, una decisión anterior en
+`decisiones.md`) la resuelve citando esa evidencia; si es una decisión
+de producto sin respuesta objetiva, elige la opción más conservadora y
+consistente con el patrón ya existente, dejando explícito por qué. Nunca
+deja una pregunta sin resolver ni pausa — a diferencia del mecanismo de
+"pausa y pregunta" de `implementar-plan-aprobado` (§3 paso 5), que sigue
+existiendo para decisiones que aparecen *durante* el desarrollo (después
+de que el Coordinador ya aprobó el plan), no para la aprobación en sí.
+
+### 8.3 Límite del merge (frontera, no bloqueo)
+
+**Decisión explícita del usuario:** el Coordinador algún día va a poder
+mergear directo a un ambiente `pre` (preprod), una vez que exista ese
+ambiente — pero `pre → prod` sigue siendo 100% manual, igual que "el
+merge es siempre humano" fue la regla no negociable desde el origen de
+este proyecto. **Hoy (sin el ambiente `pre` construido todavía, depende
+de Contabo) el Coordinador llega hasta "PR abierto y revisado, listo
+para mergear" — el merge a `main` sigue siendo tu clic**, no porque
+falte autonomía, sino porque el destino (`pre`) todavía no existe.
+
+### 8.4 Gotchas de plataforma, encontrados en vivo
+
+1. **`claude-code-action` rechaza correr si el actor que disparó el
+   workflow es un bot** ("Workflow initiated by non-human actor... Add
+   bot to allowed_bots list or use '*'") — apareció en el primer intento
+   (piloto por-repo, ya reemplazado por el diseño central de 8.1, pero
+   el gotcha sigue siendo válido para cualquier workflow futuro que
+   reaccione con `claude-code-action` directo a un comentario de bot):
+   agregar `allowed_bots: "*"` al step.
+2. **`Secrets` y `Variables` son pestañas distintas** en Settings →
+   Secrets and variables → Actions — poner `COORDINADOR_API_TOKEN` o
+   `ROUTINE_COORDINADOR_ID` en la pestaña equivocada hace que
+   `${{ secrets.X }}`/`${{ vars.X }}` resuelva vacío, y el `curl` de
+   `coordinador-avisar-plan.yml` falla con **exit code 43** ("bad
+   function argument") sin ningún mensaje de error claro más allá del
+   código de salida — si aparece ese error, lo primero a revisar es en
+   qué pestaña quedó cada valor.
+
+### 8.5 Qué falta (próximos incrementos, no construidos)
+
+- **Incremento 2**: que el Coordinador también decida si pedir
+  `/ajustar` tras la revisión automática del PR (`revisor-codigo`/
+  `documentador`) — hoy esa decisión la sigue tomando el humano.
+- **Incremento 3** (bloqueado hasta Contabo): merge a `pre` + entorno de
+  pruebas UX con URL real (ver §4 — GitHub Pages no puede hospedar esto,
+  necesita un servidor real).
+- Modelo de IA distinto según `esfuerzo-chico`/`esfuerzo-grande` (Haiku
+  vs. Sonnet) para ahorrar costo — no construido, es un quick win
+  pendiente ya que la clasificación de esfuerzo (§2) ya existe.
+- Extender `pm-diario` para reconocer los comentarios del Coordinador
+  (bot, empiezan con `/aprobar`, contienen "Resolución de preguntas
+  abiertas") y armar una sección nueva en el dashboard — "Aprobado
+  automáticamente por el Coordinador" — para que el reporte diario que
+  ya se mira todos los días muestre qué hizo la fábrica sola.
+- Confirmar que aprobar varios planes a la vez efectivamente corre en
+  paralelo (cada `/fire` debería ser una sesión independiente, pero no
+  se probó explícitamente con 2-3 simultáneos).
+- Reanudo automático si se agota la cuota/tokens — sin resolver.
