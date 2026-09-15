@@ -793,6 +793,36 @@ body.sidebar-collapsed .main-wrapper {
   gap: 4px;
 }
 
+/* Variacion porcentual vs periodo anterior equivalente (/summary/compare).
+   Vacio por defecto: si el endpoint falla el span queda sin texto y la
+   tarjeta sigue mostrando su valor absoluto sin hueco visible. */
+.card-delta {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+  margin-top: 2px;
+  color: var(--color-gray);
+}
+
+.card-delta:empty {
+  display: none;
+}
+
+/* Favorable: sube una metrica donde mas es mejor, o baja el bounce rate. */
+.card-delta-up {
+  color: var(--color-primary);
+}
+
+/* Desfavorable: el caso inverso. */
+.card-delta-down {
+  color: var(--color-error);
+}
+
+/* Sin cambio, o sin dato base en el periodo anterior para comparar. */
+.card-delta-neutral {
+  color: var(--color-gray);
+}
+
 /* Tooltip for KPI card help icon (same data-tooltip + ::after pattern as .sidebar.collapsed .nav-link) */
 .card-help-icon {
   position: relative;

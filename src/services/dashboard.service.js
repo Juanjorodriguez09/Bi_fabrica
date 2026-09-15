@@ -907,6 +907,29 @@ async function getCountryList(siteId, startDate, endDate) {
 // Comparacion de Periodos
 // ============================================
 
+// Las 8 metricas que devuelve getSummary(), en camelCase hacia el frontend.
+const SUMMARY_METRICS = [
+  'pageviews',
+  'sessions',
+  'uniqueVisitors',
+  'newVisitors',
+  'returningVisitors',
+  'bounceRate',
+  'avgSessionDuration',
+  'avgPagesPerSession'
+];
+
+// Variacion porcentual de una metrica entre el periodo actual y el anterior,
+// redondeada a un decimal. Si el valor anterior es 0 devuelve 0, siguiendo la
+// misma convencion que trafficGrowth en getAdvancedMetrics: nunca Infinity ni
+// NaN, que res.json() serializaria como null y romperia la forma estable de la
+// respuesta. Consecuencia conocida y documentada: un 0 aqui significa tanto
+// "sin cambio" como "sin dato base para comparar".
+function calculatePercentChange(currentValue, previousValue) {
+  if (!(previousValue > 0)) return 0;
+  return Math.round(((currentValue - previousValue) / previousValue) * 1000) / 10;
+}
+
 async function getSummaryCompare(siteId, startDate, endDate, filters = {}) {
   // Calcular periodo anterior con la misma duracion
   const start = new Date(startDate + 'T00:00:00.000Z');
@@ -928,7 +951,14 @@ async function getSummaryCompare(siteId, startDate, endDate, filters = {}) {
     )
   ]);
 
-  return { current, previous };
+  // Aditivo: `current` y `previous` se mantienen intactos para no romper a
+  // getAdvancedMetrics, que consume esta misma funcion.
+  const changes = {};
+  for (const metric of SUMMARY_METRICS) {
+    changes[metric] = calculatePercentChange(current[metric], previous[metric]);
+  }
+
+  return { current, previous, changes };
 }
 
 // ============================================
