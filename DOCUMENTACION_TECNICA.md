@@ -353,7 +353,7 @@ Todos son `GET /api/v1/dashboard/<endpoint>` y comparten parámetros comunes:
 |-------|----------|-------------|
 | **General** | `/sites` | Lista de sitios disponibles |
 | | `/summary` | Métricas principales (visitas, sesiones, bounce rate, duración) |
-| | `/summary/compare` | Comparación entre dos períodos |
+| | `/summary/compare` | Período seleccionado vs. período anterior equivalente + % de variación por métrica (detalle en 4.2.1) |
 | **Tendencias** | `/trend/daily` | Visitantes por día |
 | | `/trend/hourly` | Visitantes por hora del día |
 | **Eventos** | `/events` | Distribución de tipos de evento |
@@ -377,6 +377,59 @@ Todos son `GET /api/v1/dashboard/<endpoint>` y comparten parámetros comunes:
 | **E-commerce** | `/ecommerce/funnel` | Funnel: view → cart → checkout → purchase |
 | | `/ecommerce/products` | Productos más vistos / más agregados al carrito |
 | **Secciones** | `/sections` | Visitas por sección del sitio |
+
+#### 4.2.1 `/summary/compare` — variación vs. período anterior
+
+Calcula el período anterior de la misma duración, inmediatamente antes del
+rango seleccionado (en UTC explícito), aplicándole los mismos filtros
+avanzados que al período actual. Devuelve tres objetos con las mismas 8
+métricas del resumen:
+
+- `current` — métricas del rango pedido (idéntico a lo que devuelve `/summary`).
+- `previous` — métricas del período anterior equivalente.
+- `changes` — **porcentaje de variación** de `current` respecto de `previous`,
+  por métrica, redondeado a un decimal.
+
+```json
+{
+  "success": true,
+  "data": {
+    "current": {
+      "pageviews": 1240, "sessions": 480, "uniqueVisitors": 350,
+      "newVisitors": 210, "returningVisitors": 140, "bounceRate": 42,
+      "avgSessionDuration": 168, "avgPagesPerSession": 2.6
+    },
+    "previous": {
+      "pageviews": 1100, "sessions": 500, "uniqueVisitors": 350,
+      "newVisitors": 180, "returningVisitors": 170, "bounceRate": 45,
+      "avgSessionDuration": 150, "avgPagesPerSession": 2.2
+    },
+    "changes": {
+      "pageviews": 12.7, "sessions": -4, "uniqueVisitors": 0,
+      "newVisitors": 16.7, "returningVisitors": -17.6, "bounceRate": -6.7,
+      "avgSessionDuration": 12, "avgPagesPerSession": 18.2
+    }
+  }
+}
+```
+
+**Cuando la métrica del período anterior es `0`, `changes` devuelve `0`**
+(misma convención que `trafficGrowth` en `/metrics/advanced`), en vez de
+`Infinity`, que `res.json()` serializaría como `null` en silencio. Es una
+simplificación conocida, no un bug: **un `0` en `changes` significa tanto
+"sin cambio" como "sin dato base en el período anterior para comparar"**. Las
+8 claves están siempre presentes y son siempre numéricas, incluso cuando
+ningún período tiene datos.
+
+`current` y `previous` no cambiaron de forma: `getAdvancedMetrics`
+(`/metrics/advanced`) reutiliza esta misma función internamente y sigue
+consumiéndolos igual.
+
+En el frontend, `public/dashboard.js` pinta `changes` en las 6 tarjetas
+visibles del resumen (`loadSummaryCompare()` → `renderSummaryDeltas()`). El
+control "Comparar" (`compare-toggle`) y la alerta de "Caída de Tráfico"
+siguen sin cablear — son piezas de UI distintas, fuera del alcance de este
+endpoint.
 
 ### 4.3 Flujo de una petición en el Dashboard
 

@@ -860,6 +860,77 @@
     }
   }
 
+  // Tarjeta de resumen -> clave de la metrica dentro de `changes` (/summary/compare).
+  // Solo las 6 tarjetas visibles; el endpoint devuelve las 8 metricas del resumen.
+  const SUMMARY_DELTA_TARGETS = [
+    { elementId: 'metric-pageviews-delta', metric: 'pageviews' },
+    { elementId: 'metric-sessions-delta', metric: 'sessions' },
+    { elementId: 'metric-visitors-delta', metric: 'uniqueVisitors' },
+    { elementId: 'metric-bounce-delta', metric: 'bounceRate' },
+    { elementId: 'metric-duration-delta', metric: 'avgSessionDuration' },
+    { elementId: 'metric-pages-session-delta', metric: 'avgPagesPerSession' }
+  ];
+
+  // Metricas donde subir es malo: el color de la variacion se invierte.
+  const INVERSE_SUMMARY_METRICS = ['bounceRate'];
+
+  function renderSummaryDeltas(changes) {
+    SUMMARY_DELTA_TARGETS.forEach(function (target) {
+      const el = document.getElementById(target.elementId);
+      if (!el) return;
+
+      const value = changes ? changes[target.metric] : undefined;
+
+      // Sin dato utilizable: se vacia la tarjeta en vez de pintar NaN%/undefined%.
+      if (typeof value !== 'number' || !isFinite(value)) {
+        el.textContent = '';
+        el.className = 'card-delta';
+        el.removeAttribute('title');
+        return;
+      }
+
+      // textContent, nunca innerHTML (punto 15 del checklist de seguridad).
+      el.textContent = (value > 0 ? '+' : '') + value + '% vs. anterior';
+
+      let tone = 'neutral';
+      if (value !== 0) {
+        const isFavorable = INVERSE_SUMMARY_METRICS.indexOf(target.metric) !== -1
+          ? value < 0
+          : value > 0;
+        tone = isFavorable ? 'up' : 'down';
+      }
+      el.className = 'card-delta card-delta-' + tone;
+
+      // El backend devuelve 0 tanto para "sin cambio" como para "periodo
+      // anterior en cero" (ver calculatePercentChange en dashboard.service.js).
+      el.title = value === 0
+        ? 'Sin cambio respecto al periodo anterior de igual duracion, o sin datos en ese periodo para comparar'
+        : 'Variacion respecto al periodo anterior de igual duracion, inmediatamente antes del rango seleccionado';
+    });
+  }
+
+  // Se resuelve aparte de loadSummary() a proposito: si /summary/compare falla,
+  // las tarjetas conservan sus valores absolutos y solo se pierde la variacion.
+  async function loadSummaryCompare() {
+    try {
+      const data = await fetchAPI('/summary/compare', {
+        siteId: state.siteId,
+        startDate: state.startDate,
+        endDate: state.endDate,
+        ...state.filters
+      });
+
+      // No se cablea compare-toggle ni se pasa este objeto a checkAlerts(): la
+      // curva de tendencia superpuesta (state.compareEnabled) y la alerta de
+      // caida de trafico quedan fuera del alcance de este cambio.
+      state.compareData = data;
+      renderSummaryDeltas(data.changes);
+    } catch (error) {
+      console.error('Error loading summary compare:', error);
+      renderSummaryDeltas(null);
+    }
+  }
+
   async function loadTrend() {
     showLoading('trend');
     try {
@@ -1833,6 +1904,7 @@
 
     Promise.all([
       loadSummary(),
+      loadSummaryCompare(),
       loadTrend(),
       loadEvents(),
       loadPages(),
