@@ -25,10 +25,17 @@ jobs:
           gh issue edit ${{ github.event.issue.number }} --repo ${{ github.repository }} \
             --remove-label "esperando-humano"
 
+      - name: Detectar esfuerzo (elige el modelo de la Routine, mismo criterio con el que empezó)
+        id: esfuerzo
+        run: |
+          ES_GRANDE=$(jq -r '.issue.labels | map(.name == "esfuerzo-grande") | any' "$GITHUB_EVENT_PATH")
+          echo "es_grande=$ES_GRANDE" >> "$GITHUB_OUTPUT"
+
       - name: ▶️ Continuar Routine vía API
         id: fire
         env:
-          ROUTINE_API_TOKEN: ${{ secrets.ROUTINE_API_TOKEN }}
+          ROUTINE_API_TOKEN: ${{ steps.esfuerzo.outputs.es_grande == 'true' && secrets.ROUTINE_API_TOKEN_GRANDE || secrets.ROUTINE_API_TOKEN }}
+          ROUTINE_ID: ${{ steps.esfuerzo.outputs.es_grande == 'true' && vars.ROUTINE_IMPLEMENTAR_GRANDE_ID || vars.ROUTINE_IMPLEMENTAR_ID }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           REPO: ${{ github.repository }}
           COMMENT_USER: ${{ github.event.comment.user.login }}
@@ -38,7 +45,7 @@ jobs:
             --arg repo "$REPO" \
             --arg user "$COMMENT_USER" \
             '{text: ("Issue #" + $n + " de " + $repo + " estaba pausado esperando respuesta humana. " + $user + " respondió en un comentario nuevo del Issue — leé el hilo completo del Issue (tu propia pregunta y la respuesta más reciente) y CONTINUÁ el desarrollo en la rama existente claude/issue-" + $n + "-* (no crees una rama nueva, no reinicies el trabajo ya hecho). Si no encontrás esa rama, algo salió mal: comentalo en el Issue y detenete ahí, no arranques de cero.")}')
-          RESPONSE=$(curl -s -X POST "https://api.anthropic.com/v1/claude_code/routines/${{ vars.ROUTINE_IMPLEMENTAR_ID }}/fire" \
+          RESPONSE=$(curl -s -X POST "https://api.anthropic.com/v1/claude_code/routines/${ROUTINE_ID}/fire" \
             -H "Authorization: Bearer $ROUTINE_API_TOKEN" \
             -H "anthropic-beta: experimental-cc-routine-2026-04-01" \
             -H "anthropic-version: 2023-06-01" \
