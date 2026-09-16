@@ -82,28 +82,43 @@ jobs:
             SÍNCRONA/bloqueante (NO en segundo plano, NO como tarea async) y espera
             su resultado completo antes de seguir con el siguiente.
 
-            Cuando tengas los tres resultados, escribe UN solo comentario consolidado
-            (más severo primero, con secciones claras por subagente, marcando
-            explícitamente cada hallazgo como REAL/CRÍTICO o COSMÉTICO/INFORMATIVO)
-            a un archivo temporal con Write, y publícalo con:
+            Antes de escribir el comentario, decidí cuál de estos 3 casos aplica —
+            porque en uno de ellos el comentario necesita una marca especial:
+
+            - **Caso A** — NO hay ningún hallazgo REAL/CRÍTICO (solo cosméticos,
+              informativos, o ninguno).
+            - **Caso B** — SÍ hay al menos un hallazgo REAL/CRÍTICO, pero este PR ya
+              tiene más de 1 commit (${{ github.event.pull_request.commits }} > 1, es
+              decir ya se corrigió automáticamente antes) → ya se usó el único intento
+              automático permitido en este workflow.
+            - **Caso C** — SÍ hay al menos un hallazgo REAL/CRÍTICO Y este PR tiene
+              exactamente 1 commit (nunca se corrigió automáticamente antes).
+
+            Escribe UN solo comentario consolidado (más severo primero, con secciones
+            claras por subagente, marcando explícitamente cada hallazgo como
+            REAL/CRÍTICO o COSMÉTICO/INFORMATIVO) a un archivo temporal con Write. Si
+            el caso es **B**, agregá al final del comentario, en su propia línea, EXACTAMENTE
+            este texto (sin modificarlo, es una marca que otro sistema busca de forma
+            literal):
+
+            ```
+            🧭 ESPERANDO_DECISION: hay hallazgos reales sin corregir y ya se usó el intento automático de corrección.
+            ```
+
+            Publicá el comentario con:
 
             ```
             gh pr comment ${{ github.event.pull_request.number }} --body-file <ruta-del-archivo>
             ```
 
-            Después de publicar el comentario, decidí si corresponde disparar una
-            corrección automática, con esta regla exacta:
+            Después de publicar el comentario, actuá según el caso:
 
-            - Si NO hay ningún hallazgo REAL/CRÍTICO (solo cosméticos, informativos, o
-              ninguno) → no hagas nada más, terminaste.
-            - Si SÍ hay al menos un hallazgo REAL/CRÍTICO, pero este PR ya tiene más de
-              1 commit (${{ github.event.pull_request.commits }} > 1, es decir ya se
-              corrigió automáticamente antes) → no dispares otra corrección, ya se usó
-              el único intento automático permitido; deja el comentario para que un
-              humano decida. Terminaste.
-            - Si SÍ hay al menos un hallazgo REAL/CRÍTICO Y este PR tiene exactamente 1
-              commit (nunca se corrigió automáticamente antes) → disparás la Routine de
-              corrección UNA sola vez, ejecutando exactamente:
+            - **Caso A** → no hagas nada más, terminaste.
+            - **Caso B** → no dispares ninguna corrección — el comentario ya lleva la
+              marca de arriba, que otro sistema (el Coordinador) va a leer para decidir
+              si vale la pena un ajuste más. Terminaste.
+            - **Caso C** → disparás la Routine de corrección UNA sola vez, ejecutando
+              exactamente:
 
               ```
               curl -X POST "https://api.anthropic.com/v1/claude_code/routines/${{ vars.ROUTINE_CORREGIR_ID }}/fire" \
