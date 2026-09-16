@@ -665,15 +665,10 @@ falte autonomía, sino porque el destino (`pre`) todavía no existe.
 
 ### 8.5 Qué falta (próximos incrementos, no construidos)
 
-- **Incremento 2**: que el Coordinador también decida si pedir
-  `/ajustar` tras la revisión automática del PR (`revisor-codigo`/
-  `documentador`) — hoy esa decisión la sigue tomando el humano.
-- **Incremento 3** (bloqueado hasta Contabo): merge a `pre` + entorno de
-  pruebas UX con URL real (ver §4 — GitHub Pages no puede hospedar esto,
-  necesita un servidor real).
-- Modelo de IA distinto según `esfuerzo-chico`/`esfuerzo-grande` (Haiku
-  vs. Sonnet) para ahorrar costo — no construido, es un quick win
-  pendiente ya que la clasificación de esfuerzo (§2) ya existe.
+- **Incremento 3** (bloqueado hasta que el entorno `pre` real esté
+  levantado, ver §10): merge a `pre` + entorno de pruebas UX con URL
+  real (ver §4 — GitHub Pages no puede hospedar esto, necesita un
+  servidor real).
 - Extender `pm-diario` para reconocer los comentarios del Coordinador
   (bot, empiezan con `/aprobar`, contienen "Resolución de preguntas
   abiertas") y armar una sección nueva en el dashboard — "Aprobado
@@ -683,3 +678,175 @@ falte autonomía, sino porque el destino (`pre`) todavía no existe.
   paralelo (cada `/fire` debería ser una sesión independiente, pero no
   se probó explícitamente con 2-3 simultáneos).
 - Reanudo automático si se agota la cuota/tokens — sin resolver.
+- "Sesiones de planning facilitadas con PO" (parte del diagrama más
+  amplio que mandó el jefe, ver §8) — todavía sin bajar a un diseño
+  concreto.
+
+### 8.6 Incremento 2 construido — decide ajustes de PR (2026-09-16)
+
+Cierra el segundo punto de intervención humana: hasta ahora, si
+`revisar-pr.yml` encontraba un hallazgo REAL/CRÍTICO pero el PR ya había
+gastado su único intento automático de corrección (más de 1 commit), el
+comentario quedaba esperando que un humano escribiera `/ajustar` a mano.
+Ahora el Coordinador toma esa decisión — con un límite de seguridad
+explícito para no entrar en loop.
+
+**Qué se creó/modificó (en los dos repos de proyecto):**
+
+- `revisar-pr.yml` **modificado**: cuando hay hallazgo real y el intento
+  automático ya se usó, el comentario de revisión ahora agrega al final
+  una marca literal:
+  ```
+  🧭 ESPERANDO_DECISION: hay hallazgos reales sin corregir y ya se usó el intento automático de corrección.
+  ```
+- `.github/workflows/coordinador-avisar-ajuste.yml` **nuevo** — mismo
+  patrón que `coordinador-avisar-plan.yml` (§8.1): dispara `/fire` a la
+  MISMA Routine `coordinador-central` (no hace falta una Routine nueva)
+  cuando un comentario de bot en un PR contiene esa marca.
+- `ajustar-pr.yml` **modificado**: la condición de disparo ahora también
+  acepta `/ajustar` posteado por una identidad bot, mismo cambio que ya
+  se le había hecho a `disparar-routine.yml` para `/aprobar`:
+  ```diff
+  - github.event.comment.user.type != 'Bot' &&
+  - contains(fromJSON('["OWNER","COLLABORATOR","MEMBER"]'), github.event.comment.author_association) &&
+  + (contains(fromJSON('["OWNER","COLLABORATOR","MEMBER"]'), github.event.comment.author_association) || github.event.comment.user.type == 'Bot') &&
+  ```
+- `.claude/agents/coordinador.md` (hub `fabrica-status`) **modificado**:
+  ahora distingue dos tareas por el texto del payload que lo invoca —
+  Tarea 1 (aprobar plan, sin cambios) y Tarea 2 (decidir un ajuste de
+  PR, nueva). El payload de `coordinador-avisar-ajuste.yml` menciona
+  "hallazgos reales de revisión sin corregir" en un PR; el de
+  `coordinador-avisar-plan.yml` menciona "un plan nuevo".
+
+**Límite de seguridad, decisión explícita del usuario — nunca lo
+saltees:** el Coordinador puede pedir como máximo **un** `/ajustar`
+extra por PR. Lo verifica contando `commits` vía `gh pr view --repo
+<owner>/<repo> --json commits` (nunca por memoria/supuesto): si ya hay
+más de 2 commits, el intento extra ya se usó (por él mismo antes, o por
+un humano) y no insiste — escala con la label `esperando-humano` (ya
+existe en los dos repos) en vez de arriesgar un loop. Además, incluso
+con margen disponible, si el hallazgo es en el fondo una decisión de
+producto sin respuesta objetiva (no algo que un ajuste de código
+resuelva mejor), escala directo sin gastar el intento.
+
+**Gap de credenciales encontrado antes de terminar:**
+`GH_TOKEN_COORDINADOR` (creado para §8) solo tenía scope `Issues` +
+`Contents: Read-only` — la Tarea 2 necesita además **`Pull requests:
+Read and write`** (para `gh pr view`/`gh pr comment`/`gh pr edit
+--add-label`) en el mismo token, sobre los mismos repos. No hace falta
+un token nuevo ni tocar Secrets — es el mismo `GH_TOKEN_COORDINADOR`
+editado con el permiso agregado.
+
+**Sin validar en vivo todavía** (2026-09-16) — depende de que un PR real
+tenga un hallazgo que sobreviva la primera corrección automática, más
+difícil de forzar a propósito que los otros flujos. Decisión explícita
+del usuario: dejarlo desplegado y confirmarlo la próxima vez que ocurra
+naturalmente, en vez de gastar una prueba sintética ahora.
+
+## 9. Modelo de IA según esfuerzo (2026-09-15)
+
+No es un ahorro de costo — es un upgrade selectivo de capacidad para el
+trabajo de mayor riesgo, usando la clasificación `esfuerzo-chico`/
+`esfuerzo-grande` que el `planificador` ya venía poniendo (§2), sin
+mecanismo nuevo de clasificación.
+
+- `esfuerzo-chico` sigue exactamente en **Sonnet**, sin ningún cambio.
+- `esfuerzo-grande` dispara una **segunda Routine**,
+  `implementar-plan-aprobado-grande` — mismas instrucciones exactas que
+  la original, configurada con **Opus** en vez de Sonnet.
+- `disparar-routine.yml` y `continuar-plan-pausado.yml` (los dos repos)
+  eligen cuál Routine llamar leyendo la label del Issue, con un paso
+  nuevo ("Detectar esfuerzo") y una expresión ternaria en el `env:` del
+  step de disparo:
+  ```yaml
+  ROUTINE_ID: ${{ steps.esfuerzo.outputs.es_grande == 'true' && vars.ROUTINE_IMPLEMENTAR_GRANDE_ID || vars.ROUTINE_IMPLEMENTAR_ID }}
+  ROUTINE_TOKEN: ${{ steps.esfuerzo.outputs.es_grande == 'true' && secrets.ROUTINE_API_TOKEN_GRANDE || secrets.ROUTINE_API_TOKEN }}
+  ```
+- Por repo, hace falta crear: la Routine nueva (mismo entorno CCR que la
+  original, solo cambia el modelo elegido al crearla) +
+  `ROUTINE_API_TOKEN_GRANDE` (Secret) + `ROUTINE_IMPLEMENTAR_GRANDE_ID`
+  (Variable).
+
+**Confirmado en vivo en `Bi_fabrica`** (Issue #37): el Coordinador
+resolvió 4 preguntas abiertas reales con buen criterio (encontró código
+reutilizable existente en vez de proponer duplicarlo), y el log de
+`disparar-routine.yml` confirmó que se llamó al `ROUTINE_ID` de la
+Routine configurada con Opus. **Desplegado también en `WebChat_Fabrica`**
+(misma Routine/secrets/vars creadas), pero sin probar ahí — decisión
+explícita del usuario de no gastar una segunda prueba del mismo
+mecanismo ya confirmado.
+
+## 10. Entorno real de despliegue — cPanel dev/preprod (en progreso, 2026-09-16)
+
+Primera vez que la fábrica sale de "todo vive en GitHub Actions" hacia
+un servidor real. El jefe dio acceso a un cPanel compartido
+(`fabricaiamic@fabrica.micomercio.co`, hosting en `supercp.com`) y
+confirmó la arquitectura de infraestructura (independiente de la
+arquitectura de la fábrica en sí):
+
+- **Desarrollo y preproducción comparten un solo cPanel** — carpetas y
+  bases de datos separadas, mismo panel/recursos. No un cPanel por
+  ambiente.
+- **Producción es un cPanel separado por proyecto** (repo/producto, no
+  por cliente/tenant de MiComercio Chat — confirmado explícitamente con
+  el usuario, sin necesidad de volver a preguntarle al jefe) — para que
+  la caída de un proyecto no afecte a los demás.
+- El repo de cada proyecto es público (`Bi_fabrica`,
+  `WebChat_Fabrica`) — el propio "Git™ Version Control" nativo de cPanel
+  puede clonarlo sin ninguna credencial. Cuando la fábrica se mude a la
+  cuenta de GitHub limpia (que el usuario mismo va a crear, no el jefe),
+  revisar si siguen siendo públicos o si hace falta una deploy key.
+
+**Los pasos concretos, literales, están en `GUIA_INSTALACION_FABRICA.md`
+Parte D** (no acá — este documento es la bitácora de decisiones y
+gotchas, no el instructivo). Resumen de lo ya construido para
+`Bi_fabrica`: subdominios `dev.fabrica.micomercio.co`/
+`preprod.fabrica.micomercio.co`, 2 bases PostgreSQL con sus usuarios,
+app Node.js de dev corriendo, rama `pre` creada en el repo (no existía),
+clave SSH propia para despliegue futuro.
+
+**Tres gotchas de plataforma reales, para no repetir el tiempo de
+depuración:**
+
+1. **`prisma generate` se cae por memoria en este cPanel**
+   (`RangeError: Out of memory: Cannot allocate Wasm memory for new
+   instance`) — el hosting impone `ulimit -v` de 4GB (CloudLinux/LVE) y
+   el motor WASM de Prisma (desde ~v5.2x) reserva un bloque grande de
+   memoria virtual de una sola vez al arrancar, sin importar cuánta
+   memoria real vaya a usar — no es arreglable sin acceso root (subir el
+   límite requiere WHM). **Workaround, sin tocar el servidor:** generar
+   el cliente de Prisma en la máquina local (sin esa restricción), con
+   `binaryTargets` en `prisma/schema.prisma` incluyendo el target real
+   que pide el `nodevenv` de cPanel (confirmarlo con el mensaje de error
+   exacto de Prisma al cargar el cliente — en este caso
+   `debian-openssl-1.0.x`, aunque el SO real del servidor sea RHEL7), y
+   subir `node_modules/.prisma/client` ya generado por `rsync`/SCP en vez
+   de correr `prisma generate` en el servidor.
+2. **Vaciar la carpeta de una app Node ya creada en "Setup Node.js App"
+   borra también su `.htaccess`** (con las directivas
+   `PassengerAppRoot`/`PassengerBaseURI`/`PassengerNodejs`/
+   `PassengerAppType`/`PassengerStartupFile`) — sin él, Stop/Save de esa
+   app falla con `FileNotFoundError` desde el `cl_selector` de
+   CloudLinux. Evitar: crear el Node app DESPUÉS de clonar el repo en la
+   carpeta (no antes), o guardar ese archivo antes de vaciar la carpeta.
+3. **El límite de procesos (LVE) de una cuenta cPanel compartida puede
+   agotarse con actividad normal de configuración** (75/75 en este
+   caso, con solo 1 app corriendo) — probablemente por conexiones SSH
+   cortadas de golpe (no con `exit` limpio) que dejan procesos colgados
+   sin limpiarse. Cuando pasa, **absolutamente todo lo que necesite
+   forkear un proceso nuevo falla** (`cagefs_enter: Unable to fork`):
+   SSH, Terminal, Resource Usage, crear una app nueva — no es específico
+   de una sola herramienta. **No hay forma de destrabarlo sin acceso
+   root/WHM** — cPanel no le da a una cuenta de usuario ninguna
+   herramienta para ver/matar procesos ajenos. Evitar generar esta
+   situación: no encadenar comandos SSH automatizados sin manejar bien
+   la desconexión, y esperar a que una conexión termine limpio antes de
+   abrir la siguiente.
+
+**Bloqueado ahora mismo por el gotcha #3** — el usuario le escribió al
+jefe pidiendo que soporte del hosting libere la cuenta, o cree una
+cuenta nueva si es más rápido. Falta: la app Node de preprod, replicar
+todo en `WebChat_Fabrica` (mismo cPanel), y diseñar el despliegue
+automático real (GitHub Actions → cPanel, probablemente vía API Token de
+cPanel + `git pull` sobre el Git Version Control ya conectado, en vez de
+SSH directo) una vez destrabado.

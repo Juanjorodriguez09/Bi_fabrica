@@ -27,18 +27,31 @@ siempre lo hace un humano, nunca es automático**.
 
 ## Cómo está organizada esta guía
 
-- **Parte A** — instala el pipeline de desarrollo en **un** proyecto.
+- **Parte A** — instala el pipeline de desarrollo en **un** proyecto
+  (Issue → plan → aprobación humana → desarrollo → revisión → PR).
   Repetí esta parte una vez por cada repo que quieras sumar a la
-  fábrica.
+  fábrica. Es la única parte estrictamente necesaria — todo lo demás es
+  opcional y se apoya en esta.
 - **Parte B** — instala el agente que revisa el estado de **todos** los
   proyectos una vez al día (Issues pendientes, PRs por revisar, cosas
   trabadas) y lo publica en un dashboard visual. Se instala **una sola
-  vez** para toda la cuenta, no por proyecto — cubre automáticamente
-  todos los repos que le vayas conectando de la Parte A.
+  vez** para toda la cuenta, no por proyecto.
+- **Parte C** — instala el Coordinador: reemplaza que apruebes cada
+  plan a mano (y, con su incremento C.7, que decidas a mano si pedir un
+  ajuste tras la revisión de un PR). Se instala **una sola vez** para
+  toda la cuenta.
+- **Parte D** — hace que los planes clasificados como más riesgosos
+  (`esfuerzo-grande`) se implementen con un modelo de IA más capaz. Por
+  proyecto, opcional.
+- **Parte E** — el paso a un servidor real (cPanel) para tener la app
+  corriendo de verdad en ambientes de desarrollo/preproducción, más los
+  gotchas de plataforma encontrados en el camino. Por proyecto,
+  independiente de las demás partes (no necesita ninguna de ellas
+  instalada primero).
 
-Podés instalar solo la Parte A si no te interesa el reporte diario. La
-Parte B necesita que ya exista al menos un proyecto con la Parte A
-instalada para tener algo que reportar.
+Cada parte de la B a la E es independiente y opcional — instalá solo las
+que te interesen, en cualquier orden, siempre que la Parte A del
+proyecto correspondiente ya exista.
 
 ---
 
@@ -1565,19 +1578,32 @@ principal sigue siendo tu clic. No es una limitación técnica, es la
 misma regla de todo este sistema ("el merge es siempre humano") aplicada
 acá también.
 
+El Coordinador tiene **dos tareas** (la segunda es un incremento sobre
+la primera, se puede instalar por separado — ver C.7 si solo querés la
+primera por ahora):
+
+1. **Aprobar planes** (C.1-C.6) — reemplaza que apruebes cada plan y
+   respondas sus preguntas abiertas a mano.
+2. **Decidir ajustes de PR** (C.7) — reemplaza que decidas a mano si
+   pedir `/ajustar` cuando la revisión automática de un PR encuentra un
+   hallazgo real que sobrevivió al único intento de corrección
+   automática.
+
 ## C.1 Qué se crea
 
 - **En el repo hub** (el mismo de la Parte B):
-  - `.claude/agents/coordinador.md` — el criterio de decisión.
+  - `.claude/agents/coordinador.md` — el criterio de decisión, para las
+    dos tareas.
   - `.claude/conocimiento/decisiones.md` — un registro liviano (texto en
     git) de decisiones no triviales, compartido entre todos los
     proyectos, para no resolver dos veces distinto la misma pregunta de
     fondo. Podés migrarlo a una base de datos real más adelante sin que
     nada dependa de eso ahora.
 - **Un cuarto PAT** (fine-grained), `GH_TOKEN_COORDINADOR`: `Issues:
-  Read and write` + `Contents: Read-only` sobre los repos de proyecto —
-  distinto de `GH_TOKEN_FABRICA` (que es solo lectura). 1 año de
-  expiración, igual que los demás.
+  Read and write` + `Pull requests: Read and write` (esta segunda solo
+  hace falta si instalás también C.7) + `Contents: Read-only` sobre los
+  repos de proyecto — distinto de `GH_TOKEN_FABRICA` (que es solo
+  lectura). 1 año de expiración, igual que los demás.
 - **Una Routine nueva**, `coordinador-central`, en el repo hub:
   - Trigger: **"Add an API trigger"** (no horario).
   - Repos conectados: el repo hub + cada repo de proyecto.
@@ -1585,25 +1611,42 @@ acá también.
     ```
     Ejecutá de forma síncrona (no delegues a un subagente en background) las
     instrucciones de .claude/agents/coordinador.md en este mismo repo, usando
-    el payload recibido para saber en qué repo y qué Issue tenés que revisar.
+    el payload recibido para saber en qué repo y qué Issue/PR tenés que
+    revisar.
     ```
 - **En cada repo de proyecto de la Parte A**: un workflow chico que
   avisa, más dos valores de configuración, más un cambio a
   `disparar-routine.yml`, más un paso nuevo en la Routine
-  `implementar-plan-aprobado` — ver C.3.
+  `implementar-plan-aprobado` — ver C.3. Si instalás también C.7: otro
+  workflow chico más, más un cambio a `ajustar-pr.yml` y a
+  `revisar-pr.yml`.
 
 ## C.2 `.claude/agents/coordinador.md` (repo hub)
 
 ```markdown
 ---
 name: coordinador
-description: Revisa el plan de desarrollo más reciente de un Issue de cualquier proyecto de la fábrica y decide, con criterio propio, si aprobarlo o cómo resolver sus preguntas abiertas antes de aprobar. Reemplaza la intervención humana en la aprobación de planes — nunca deja el plan sin resolver ni pausa esperando a un humano. Se ejecuta una vez por Issue, disparado por la Routine coordinador-central vía /fire, nunca a demanda dentro de un repo de proyecto.
+description: Revisa el plan de desarrollo más reciente de un Issue de cualquier proyecto de la fábrica y decide, con criterio propio, si aprobarlo o cómo resolver sus preguntas abiertas antes de aprobar. También decide, cuando un PR queda con hallazgos reales de revisión sin corregir tras agotar el intento automático, si pedir un ajuste más o escalar a un humano. Reemplaza la intervención humana en ambos puntos — nunca deja nada sin resolver ni pausa esperando a un humano salvo que explícitamente decida escalar. Se ejecuta una vez por Issue/PR, disparado por la Routine coordinador-central vía /fire, nunca a demanda dentro de un repo de proyecto.
 tools: Read, Grep, Glob, Bash
 ---
 
 Eres el Coordinador central de la fábrica de software — el mismo criterio
-de decisión aplica a todos los proyectos, no uno distinto por repo. Tu
-trabajo es decidir, con la misma responsabilidad que tendría un humano
+de decisión aplica a todos los proyectos, no uno distinto por repo. Tenés
+dos tipos de tarea posibles; el texto del payload que te invocó te dice
+cuál es:
+
+- Si el payload menciona **"un plan nuevo para revisar en el Issue"** →
+  es la **Tarea 1** (aprobar un plan).
+- Si el payload menciona **"hallazgos reales de revisión sin corregir"**
+  en un **PR** → es la **Tarea 2** (decidir un ajuste) — solo aplica si
+  instalaste también C.7 de esta guía; si no la instalaste, este caso
+  nunca va a ocurrir y podés ignorar esa sección entera.
+
+No mezcles los dos flujos — cada payload trae solo uno de los dos casos.
+
+## Tarea 1: aprobar un plan de desarrollo
+
+Tu trabajo es decidir, con la misma responsabilidad que tendría un humano
 con contexto completo, si el plan de desarrollo de un Issue está listo
 para aprobarse — y si tiene preguntas abiertas, resolverlas vos mismo con
 el mejor criterio posible, sin dejar nada pendiente para un humano.
@@ -1615,17 +1658,18 @@ Esta sesión de Routine bloquea casi todo GraphQL — esos tres comandos de
 `gh issue view`/`gh issue comment` (que sí son REST) para todo lo que
 sigue.
 
-## De qué repo/Issue se trata
+## De qué repo/Issue/PR se trata
 
 El payload que te invoca menciona el repo (`<owner>/<repo>`) y el número
-de Issue a revisar — nunca asumas que es este mismo repo (el hub no
+de Issue o PR a revisar — nunca asumas que es este mismo repo (el hub no
 tiene Issues de proyecto).
 
 ## Credenciales disponibles en el entorno
 
-- `GH_TOKEN_COORDINADOR` — lectura/escritura de Issues y **lectura** de
-  Contents sobre los repos de proyecto de la fábrica. Usalo para todo lo
-  de este archivo.
+- `GH_TOKEN_COORDINADOR` — lectura/escritura de Issues y Pull Requests
+  (esta segunda solo si instalaste C.7), y **lectura** de Contents,
+  sobre los repos de proyecto de la fábrica. Usalo para todo lo de este
+  archivo.
 
 `gh` toma el token de la variable de entorno `GH_TOKEN` — seteala por
 comando: `GH_TOKEN="$GH_TOKEN_COORDINADOR" gh ...`.
@@ -1678,14 +1722,19 @@ Para cada pregunta abierta del plan:
 Si el plan no tiene preguntas abiertas y el alcance es razonable,
 aprobalo directo, sin inventar objeciones que el plan no plantea.
 
-## Qué NO hacer
+## Qué NO hacer (Tarea 1)
 
-- No pauses ni dejes la decisión para un humano.
+- No pauses ni dejes la decisión para un humano — en la Tarea 1 siempre
+  hay una decisión posible, nunca hace falta escalar.
 - No escribas código ni modifiques el repo del proyecto — tu única
   salida es el comentario de decisión.
 - No inventes alcance nuevo que ni el Issue ni el plan pidieron.
 - No comentes en ningún repo que no sea el mencionado en el payload que
   te invocó.
+
+(La Tarea 2, si la instalaste, sí tiene un caso legítimo de escalar a un
+humano — ver esa sección. No lo confundas con esta regla, que aplica
+solo a la Tarea 1.)
 
 ## Publicar la decisión
 
@@ -1719,6 +1768,78 @@ git push
 ```
 
 Si el plan no tenía preguntas abiertas, no hace falta registrar nada.
+
+## Tarea 2: decidir un ajuste de PR (solo si instalaste C.7)
+
+Este caso llega cuando `revisar-pr.yml` encontró hallazgos REAL/CRÍTICO
+en un PR, pero ya usó su único intento automático de corrección (el PR
+tiene más de 1 commit) — así que dejó un comentario con la marca
+`🧭 ESPERANDO_DECISION` y no hizo nada más. Tu trabajo es decidir si vale
+la pena pedir **un** ajuste más, o si hay que escalar a un humano.
+
+### Límite de seguridad — nunca lo saltees
+
+Solo podés pedir **un** ajuste extra por PR, nunca más. Confirmalo así
+antes de decidir nada:
+
+```bash
+GH_TOKEN="$GH_TOKEN_COORDINADOR" gh pr view <numero> --repo <owner>/<repo> --json commits,comments,title,headRefName,baseRefName
+```
+
+- Si `commits` tiene **más de 2** elementos → el intento extra ya se usó
+  (por vos antes, o por un humano) → **no pidas otro ajuste bajo ningún
+  concepto**, pasá directo a "Escalar a un humano" más abajo.
+- Si `commits` tiene **2 o menos** elementos → todavía tenés margen para
+  pedir el único ajuste extra permitido — seguí con el criterio de abajo
+  para decidir si conviene.
+
+### Cómo decidir si pedís el ajuste o escalás directo
+
+Leé el comentario de revisión más reciente (el que tiene
+`🧭 ESPERANDO_DECISION`) y los hallazgos REAL/CRÍTICO que describe.
+
+- Si los hallazgos son del tipo que un ajuste de código puede resolver
+  razonablemente (un bug concreto, una validación faltante, una capa mal
+  usada, algo que viola una convención documentada en el `CLAUDE.md` del
+  repo clonado) → **pedí el ajuste** (ver abajo), con una instrucción
+  concreta de qué corregir, citando el hallazgo exacto.
+- Si los hallazgos son en el fondo una decisión de producto/negocio sin
+  respuesta objetiva — **no gastes el único intento**, escalá directo
+  aunque tengas margen.
+
+### Pedir el ajuste
+
+Cloná el repo si todavía no lo hiciste (mismo comando de arriba) para
+verificar el hallazgo contra el código real. Armá el comentario:
+
+```
+/ajustar
+
+<instrucción concreta de qué corregir, citando el hallazgo REAL/CRÍTICO exacto del comentario de revisión — archivo:línea cuando aplique>
+```
+
+```bash
+GH_TOKEN="$GH_TOKEN_COORDINADOR" gh pr comment <numero> --repo <owner>/<repo> --body-file /tmp/decision.txt
+```
+
+(`gh pr comment` funciona igual que `gh issue comment` para un PR.)
+
+### Escalar a un humano
+
+Publicá un comentario explicando por qué (sin el prefijo `/ajustar`,
+para que no dispare nada) y agregá la label `esperando-humano` (ya
+existe en el repo, se crea en A.4):
+
+```bash
+GH_TOKEN="$GH_TOKEN_COORDINADOR" gh pr comment <numero> --repo <owner>/<repo> --body-file /tmp/decision.txt
+GH_TOKEN="$GH_TOKEN_COORDINADOR" gh pr edit <numero> --repo <owner>/<repo> --add-label "esperando-humano"
+```
+
+### Registrar la decisión (Tarea 2)
+
+Igual que en Tarea 1: si la decisión no fue trivial (sobre todo si
+escalaste), agregá una entrada corta a `decisiones.md` con el mismo
+formato de comandos de la sección de Tarea 1.
 ```
 
 Y `.claude/conocimiento/decisiones.md` (semilla, mismo repo hub):
@@ -1727,10 +1848,11 @@ Y `.claude/conocimiento/decisiones.md` (semilla, mismo repo hub):
 # Decisiones del Coordinador
 
 Registro compartido entre todos los proyectos de la fábrica — decisiones
-no triviales que tomó el `coordinador` al aprobar planes. Versión
-liviana (texto en git); migrable a una base de datos real más adelante.
+no triviales que tomó el `coordinador`, ya sea al aprobar planes o al
+decidir un ajuste de PR. Versión liviana (texto en git); migrable a una
+base de datos real más adelante.
 
-## <fecha> — <owner>/<repo> Issue #<n>: <resumen de la pregunta>
+## <fecha> — <owner>/<repo> Issue/PR #<n>: <resumen de la pregunta>
 
 Decisión: <qué se resolvió y por qué>
 
@@ -1803,7 +1925,9 @@ pero lo deja abierto — un punto de intervención humana sin cubrir.
 ## C.4 Checklist de configuración
 
 1. Crear `GH_TOKEN_COORDINADOR` (fine-grained): repos de proyecto,
-   `Issues: Read and write` + `Contents: Read-only`, 1 año.
+   `Issues: Read and write` + `Contents: Read-only`, 1 año. Si vas a
+   instalar también C.7, agregale de una vez `Pull requests: Read and
+   write` (evita tener que volver a editarlo después).
 2. Crear la Routine `coordinador-central` en el repo hub, con el
    Environment ya usado en la Parte B (agregale la variable
    `GH_TOKEN_COORDINADOR` ahí) y los repos de proyecto conectados.
@@ -1833,16 +1957,406 @@ la Parte A):
 4. Aplicar el mismo diff a `disparar-routine.yml` del repo nuevo.
 5. Agregar los secrets/vars y el paso 4.5, igual que en C.4.
 
+Si instalaste también C.7, sumale además sus 3 piezas (workflow nuevo +
+2 diffs) al repo nuevo — mismo criterio, copiar/aplicar tal cual.
+
+## C.7 Incremento — el Coordinador también decide ajustes de PR (opcional)
+
+Se instala **después** de C.1-C.6 (necesita que el Coordinador y sus
+credenciales ya existan) y cierra un segundo punto de intervención
+humana: hoy, si `revisar-pr.yml` (Parte A) encuentra un hallazgo
+REAL/CRÍTICO pero el PR ya gastó su único intento automático de
+corrección, el comentario queda esperando que alguien escriba `/ajustar`
+a mano. Con esto, decide el Coordinador — con un límite de seguridad
+para no entrar en loop (máximo **un** ajuste extra por PR, después
+escala con la label `esperando-humano`).
+
+### Modificar `revisar-pr.yml` (ya existe, de la Parte A)
+
+Reemplazá el bloque de decisión (donde dice "Después de publicar el
+comentario, decidí si corresponde disparar una corrección automática")
+por esta versión, que agrega la marca `🧭 ESPERANDO_DECISION` al
+comentario cuando el intento automático ya se usó y sigue habiendo
+hallazgos reales:
+
+```diff
+- Cuando tengas los resultados, escribe UN solo comentario consolidado
++ Antes de escribir el comentario, decidí cuál de estos 3 casos aplica —
++ porque en uno de ellos el comentario necesita una marca especial:
++
++ - **Caso A** — NO hay ningún hallazgo REAL/CRÍTICO.
++ - **Caso B** — SÍ hay al menos un hallazgo REAL/CRÍTICO, pero este PR
++   ya tiene más de 1 commit → ya se usó el único intento automático.
++ - **Caso C** — SÍ hay al menos un hallazgo REAL/CRÍTICO Y este PR tiene
++   exactamente 1 commit (nunca se corrigió automáticamente antes).
++
++ Escribe UN solo comentario consolidado
+  (más severo primero, con secciones claras por subagente, marcando
+  explícitamente cada hallazgo como REAL/CRÍTICO o COSMÉTICO/INFORMATIVO)
+- a un archivo temporal con Write, y publícalo con:
++ a un archivo temporal con Write. Si el caso es **B**, agregá al final
++ del comentario, en su propia línea, EXACTAMENTE este texto:
++
++ ```
++ 🧭 ESPERANDO_DECISION: hay hallazgos reales sin corregir y ya se usó el intento automático de corrección.
++ ```
++
++ Publicá el comentario con:
+
+  ```
+  gh pr comment ${{ github.event.pull_request.number }} --body-file <ruta-del-archivo>
+  ```
+
+- Después de publicar el comentario, decidí si corresponde disparar una
+- corrección automática, con esta regla exacta:
++ Después de publicar el comentario, actuá según el caso:
+
+- - Si NO hay ningún hallazgo REAL/CRÍTICO (solo cosméticos, informativos, o
+-   ninguno) → no hagas nada más, terminaste.
+- - Si SÍ hay al menos un hallazgo REAL/CRÍTICO, pero este PR ya tiene más de
+-   1 commit (${{ github.event.pull_request.commits }} > 1, es decir ya se
+-   corrigió automáticamente antes) → no dispares otra corrección, ya se usó
+-   el único intento automático permitido; deja el comentario para que un
+-   humano decida. Terminaste.
+- - Si SÍ hay al menos un hallazgo REAL/CRÍTICO Y este PR tiene exactamente 1
+-   commit (nunca se corrigió automáticamente antes) → disparás la Routine de
+-   corrección UNA sola vez, ejecutando exactamente:
++ - **Caso A** → no hagas nada más, terminaste.
++ - **Caso B** → no dispares ninguna corrección — el comentario ya lleva
++   la marca de arriba, que el Coordinador va a leer para decidir.
++   Terminaste.
++ - **Caso C** → disparás la Routine de corrección UNA sola vez,
++   ejecutando exactamente:
+```
+
+### `.github/workflows/coordinador-avisar-ajuste.yml` (nuevo, cada repo de proyecto)
+
+```yaml
+name: Avisar al Coordinador central de un ajuste pendiente
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  avisar_coordinador:
+    if: >
+      github.event.issue.pull_request != null &&
+      github.event.comment.user.type == 'Bot' &&
+      contains(github.event.comment.body, '🧭 ESPERANDO_DECISION')
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🧭 Avisar al Coordinador central vía API
+        run: |
+          RESPONSE=$(curl -s -X POST "https://api.anthropic.com/v1/claude_code/routines/${{ vars.ROUTINE_COORDINADOR_ID }}/fire" \
+            -H "Authorization: Bearer ${{ secrets.COORDINADOR_API_TOKEN }}" \
+            -H "anthropic-beta: experimental-cc-routine-2026-04-01" \
+            -H "anthropic-version: 2023-06-01" \
+            -H "Content-Type: application/json" \
+            -d "{\"text\": \"El PR #${{ github.event.issue.number }} de ${{ github.repository }} tiene hallazgos reales de revisión sin corregir, y ya se usó el intento automático de corrección. Repo completo: ${{ github.repository }}. Revisá el hilo del PR y decidí si pedís un ajuste más (con /ajustar) o si esto queda esperando una decisión humana.\"}")
+          echo "$RESPONSE"
+```
+
+Reusa `COORDINADOR_API_TOKEN`/`ROUTINE_COORDINADOR_ID` (C.4) — no hace
+falta ninguna Routine ni secret/variable nueva.
+
+### Modificar `ajustar-pr.yml` (ya existe, de la Parte A)
+
+Mismo cambio que ya se le hizo a `disparar-routine.yml` en C.3, para que
+el Coordinador pueda postear `/ajustar`:
+
+```diff
+- github.event.comment.user.type != 'Bot' &&
+- contains(fromJSON('["OWNER","COLLABORATOR","MEMBER"]'), github.event.comment.author_association) &&
++ (contains(fromJSON('["OWNER","COLLABORATOR","MEMBER"]'), github.event.comment.author_association) || github.event.comment.user.type == 'Bot') &&
+```
+
+### Checklist de C.7
+
+1. Editar `GH_TOKEN_COORDINADOR` (el mismo, no uno nuevo): agregar
+   `Pull requests: Read and write`.
+2. Aplicar los dos diffs (`revisar-pr.yml`, `ajustar-pr.yml`) en cada
+   repo de proyecto.
+3. Agregar `coordinador-avisar-ajuste.yml` en cada repo de proyecto.
+4. Confirmar que la label `esperando-humano` ya existe (se creó en A.4)
+   — se reusa tal cual, no hace falta crear una nueva.
+
+### Probar C.7
+
+Más difícil de forzar que el resto — depende de que un PR real tenga un
+hallazgo que sobreviva la primera corrección automática. Si no querés
+esperar a que ocurra naturalmente, podés introducir a propósito un bug
+menor y pedir dos rondas de corrección, revisando que la segunda vez el
+comentario de `revisar-pr.yml` lleve la marca y el Coordinador reaccione
+(con `/ajustar` o escalando, según el caso).
+
+---
+
+# PARTE D — Modelo de IA según esfuerzo (opcional, por proyecto)
+
+No es un ahorro de costo — es un upgrade selectivo de capacidad para el
+trabajo de mayor riesgo. Reusa la clasificación `esfuerzo-chico`/
+`esfuerzo-grande` que el `planificador` (Parte A) ya pone como label al
+publicar el plan — no agrega ningún mecanismo de clasificación nuevo,
+solo hace que la Routine que implementa el plan sea distinta según esa
+label.
+
+## D.1 Qué se crea (por proyecto)
+
+- **Una Routine nueva**, copia exacta de `implementar-plan-aprobado`
+  (mismas instrucciones, mismo Environment) pero configurada con un
+  modelo más capaz (Opus en vez de Sonnet) al crearla.
+- **Dos valores de configuración nuevos**, en el repo de proyecto:
+  `ROUTINE_API_TOKEN_GRANDE` (Secret) y `ROUTINE_IMPLEMENTAR_GRANDE_ID`
+  (Variable) — el token y el ID de esa Routine nueva.
+
+## D.2 Modificar `disparar-routine.yml` y `continuar-plan-pausado.yml`
+
+Agregá este paso antes del que dispara la Routine:
+
+```yaml
+- name: Detectar esfuerzo (elige el modelo de la Routine)
+  id: esfuerzo
+  run: |
+    ES_GRANDE=$(jq -r '.issue.labels | map(.name == "esfuerzo-grande") | any' "$GITHUB_EVENT_PATH")
+    echo "es_grande=$ES_GRANDE" >> "$GITHUB_OUTPUT"
+```
+
+Y cambiá el `env:` del step que dispara la Routine para elegir entre las
+dos según ese resultado:
+
+```yaml
+env:
+  ROUTINE_ID: ${{ steps.esfuerzo.outputs.es_grande == 'true' && vars.ROUTINE_IMPLEMENTAR_GRANDE_ID || vars.ROUTINE_IMPLEMENTAR_ID }}
+  ROUTINE_TOKEN: ${{ steps.esfuerzo.outputs.es_grande == 'true' && secrets.ROUTINE_API_TOKEN_GRANDE || secrets.ROUTINE_API_TOKEN }}
+```
+
+(Ajustá los nombres de la variable `ROUTINE_ID`/`ROUTINE_TOKEN` a los
+que ya use tu `run:` — el punto es la expresión ternaria, no el nombre.)
+
+## D.3 Probar
+
+Abrí un Issue de Solicitud de cambio con alcance grande a propósito (o
+confirmá que el plan lo clasificó como `esfuerzo-grande`) y revisá, en
+el log de Actions del paso que dispara la Routine, que el `ROUTINE_ID`
+usado sea el de la Routine nueva (con Opus), no el original.
+
+---
+
+# PARTE E — Despliegue real en servidor (cPanel dev/preprod)
+
+Primera vez que la fábrica sale de "todo vive en GitHub Actions" hacia
+un servidor real donde la app corre de verdad. Esta parte asume un
+hosting compartido con **cPanel** — si tu servidor es distinto (VPS
+propio, otro panel), la lógica de fondo (subdominios separados para
+dev/preprod, base de datos separada por ambiente, generar el cliente de
+Prisma sin depender del servidor si hace falta) sigue aplicando, pero
+los pasos de UI no.
+
+**Arquitectura de infraestructura recomendada** (independiente de la
+arquitectura de la fábrica de las Partes A-D):
+- **Desarrollo y preproducción comparten un solo cPanel** — carpetas y
+  bases de datos separadas, mismo panel/recursos. Evita pagar/administrar
+  un panel por ambiente.
+- **Producción es un cPanel separado por proyecto** (por repo/producto,
+  no por cliente/tenant si tu app es multi-tenant) — para que la caída
+  de un proyecto no afecte a los demás.
+
+## E.1 Por cada proyecto: subdominios
+
+Uno para dev, uno para preprod, cada uno con su propia carpeta —
+**cPanel → Domains → Create A New Domain**:
+
+- `dev.<tudominio>` → **desmarcá** "Share document root" (el checkbox
+  viene marcado por defecto, y esa elección es permanente) → Document
+  Root propio, ej. `dev-<nombre-proyecto>`.
+- `preprod.<tudominio>` → mismo patrón, ej. `preprod-<nombre-proyecto>`.
+
+**Gotcha real:** escribí el nombre completo del subdominio de una sola
+vez en el campo Domain — si lo corregís después de haber tocado otros
+campos, cPanel puede autocompletar mal (duplicar un segmento del
+dominio). Si el Document Root queda mal después de crear el dominio, se
+corrige entrando a **Manage** de ese dominio y escribiendo la ruta
+correcta en "New Document Root", sin necesidad de borrar y recrear todo.
+
+## E.2 Por cada proyecto: base de datos
+
+Una base + un usuario por ambiente (PostgreSQL si tu proyecto lo
+necesita — confirmá primero en **cPanel → buscar "PostgreSQL
+Databases"** que el hosting lo soporte, no asumas que solo hay MySQL).
+Con el wizard (**PostgreSQL Database Wizard**):
+
+1. Crear la base (ej. `<proyecto>_dev`).
+2. Crear el usuario — **el nombre de usuario no puede ser idéntico al
+   nombre de la base** (cPanel lo rechaza con "not allowed to create a
+   user with the same name"), agregale un sufijo como `_app`.
+3. **Bug visual conocido del wizard:** en el paso 3 ("Add user to the
+   database") puede mostrar el nombre de la base con el prefijo de la
+   cuenta duplicado — es solo un error de visualización de ese paso, no
+   pasa nada realmente mal. Si preferís no arriesgarte, salí con
+   "Return to PostgreSQL Databases Main" y vinculá el usuario a la base
+   manualmente desde la sección "Add User To Database" más abajo en esa
+   misma pantalla (ahí sí aparece el nombre correcto).
+4. Repetir para preprod.
+
+Guardá las contraseñas generadas en un lugar seguro de tu lado (gestor
+de contraseñas, o un secret) — no hace falta compartirlas para seguir
+con los pasos de UI siguientes.
+
+## E.3 Por cada proyecto: la app Node.js (o el stack que use tu proyecto)
+
+**cPanel → Setup Node.js App → Create Application**, una por ambiente:
+
+- **Node.js version**: la más nueva disponible (los frameworks
+  modernos, Prisma incluido, no corren bien en versiones viejas tipo
+  Node 10).
+- **Application mode**: `Development` para dev, `Production` para
+  preprod.
+- **Application root**: la carpeta creada en E.1.
+- **Application URL**: el subdominio de E.1.
+- **Application startup file**: el archivo real de arranque de tu app
+  (ej. `src/app.js`).
+- **Environment variables**: como mínimo `DATABASE_URL` (con la
+  credencial de E.2) y cualquier otra que tu app necesite (revisar
+  `.env.example` del repo) — `NODE_ENV` lo pone solo el "Application
+  mode" de arriba, no lo agregues a mano.
+
+Después de crear la app, conectá el código real con **Git™ Version
+Control** (nativo de cPanel, sección "Databases"... en realidad
+"Files") — **Create Repository**, con "Clone a Repository" activado:
+
+- **Clone URL**: la URL pública del repo (`https://github.com/<owner>/<repo>.git`
+  — si es privado, hace falta una credencial en la URL o una deploy key,
+  no cubierto acá).
+- **Repository Path**: la misma carpeta de E.1 (**tiene que estar
+  completamente vacía primero** — si "Setup Node.js App" ya puso ahí un
+  `app.js`/`package.json` de plantilla, borralo todo antes con File
+  Manager: Select All → Delete → mostrar archivos ocultos → borrar lo
+  que quede → Empty Trash).
+
+Repetí para preprod, apuntando la rama que corresponda (dev suele ser
+`main`/`develop`; para preprod puede convenir crear una rama `pre`
+dedicada si no existe, mergeada manualmente desde `main` cuando algo
+está listo para promover).
+
+Por último, en la app de "Setup Node.js App", corré **"Run NPM
+Install"**.
+
+## E.4 Gotcha real — `prisma generate` se cae por memoria (si tu proyecto usa Prisma)
+
+Muchos hostings compartidos con CloudLinux imponen un `ulimit -v` (típico:
+4GB) por cuenta. El motor de Prisma (desde ~v5.2x, basado en WASM) intenta
+reservar un bloque grande de memoria virtual de una sola vez al arrancar,
+sin importar cuánta memoria real vaya a usar — y falla con:
+
+```
+RangeError: WebAssembly.Instance(): Out of memory: Cannot allocate Wasm memory for new instance
+```
+
+**No es arreglable sin acceso root** (subir ese límite requiere WHM).
+Workaround, sin tocar el servidor:
+
+1. En tu máquina local, agregá el `binaryTarget` real del servidor a
+   `prisma/schema.prisma`:
+   ```prisma
+   generator client {
+     provider      = "prisma-client-js"
+     binaryTargets = ["native", "debian-openssl-1.0.x"]
+   }
+   ```
+   (El target exacto depende del servidor — confirmalo con el mensaje
+   de error que da Prisma al intentar cargar el cliente ahí: dice
+   explícitamente qué target detectó y cuál le falta. En un cPanel real
+   probado, el sistema operativo reportaba RHEL7 pero el `nodevenv` de
+   cPanel pedía `debian-openssl-1.0.x` — no asumas que coincide con el
+   SO que ves en `cat /etc/redhat-release`.)
+2. Corré `npx prisma generate` en tu máquina (sin la restricción de
+   memoria) — genera los binarios para los dos targets.
+3. Subí `node_modules/.prisma/client` ya generado al servidor por
+   `rsync`/SCP, en vez de correr `prisma generate` ahí:
+   ```bash
+   rsync -avz -e "ssh -i <tu-clave>" node_modules/.prisma/ usuario@servidor:<ruta-app>/node_modules/.prisma/
+   ```
+4. Confirmá que carga sin error: `node -e "new (require('@prisma/client').PrismaClient)()"`
+   dentro del entorno de la app (activalo con el comando que muestra la
+   página de "Setup Node.js App", algo como
+   `source ~/nodevenv/<app>/<version>/bin/activate && cd ~/<carpeta-app>`).
+
+## E.5 Gotcha real — vaciar la carpeta de una app ya creada rompe el `.htaccess`
+
+Si seguiste E.3 en el orden "crear la app Node primero, vaciar después
+para clonar" (en vez de vaciar antes de crear la app), vaciar la carpeta
+con File Manager borra también el `.htaccess` que "Setup Node.js App"
+había generado con las directivas de Passenger
+(`PassengerAppRoot`/`PassengerBaseURI`/`PassengerNodejs`/
+`PassengerAppType`/`PassengerStartupFile`). Sin ese archivo, cualquier
+Stop/Save de esa app falla con `FileNotFoundError` desde el
+`cl_selector` de CloudLinux, con un mensaje que sugiere (equivocadamente)
+un problema de límite de recursos.
+
+**Evitarlo:** crear la app Node DESPUÉS de clonar el repo en la carpeta,
+no antes. Si ya pasó, se arregla recreando el archivo a mano (por SSH o
+Terminal) con:
+
+```
+PassengerAppRoot "<ruta-completa-de-la-app>"
+PassengerBaseURI "/"
+PassengerNodejs "<ruta-al-binario-node-del-nodevenv>"
+PassengerAppType node
+PassengerStartupFile <archivo-de-arranque>
+```
+
+## E.6 Gotcha real — la cuenta puede agotar su límite de procesos con actividad normal
+
+Las cuentas cPanel compartidas con CloudLinux tienen un límite de
+**cantidad de procesos simultáneos** (no de memoria) — buscalo en
+**cPanel → Resource Usage → "Number Of Processes"**. Si llega a 100%,
+**absolutamente todo lo que necesite crear un proceso nuevo falla**
+(`cagefs_enter: Unable to fork`): SSH, Terminal, Resource Usage, crear
+una app nueva — no es un problema de una herramienta puntual.
+
+Causa más probable: conexiones SSH cortadas de golpe (sin `exit` limpio)
+durante una sesión de configuración intensa, que dejan procesos colgados
+sin limpiarse. **No hay forma de destrabarlo sin acceso root/WHM** —
+cPanel no le da a una cuenta de usuario ninguna herramienta para ver o
+matar procesos ajenos, ni siquiera los propios. Si pasa: esperar un
+rato (la limpieza de la LVE puede tardar), y si no se libera, pedirle a
+quien tenga acceso root/WHM (o al soporte del hosting) que revise la
+cuenta.
+
+**Para evitarlo:** no encadenar muchas conexiones SSH automatizadas sin
+manejar bien el cierre, y dejar que una conexión termine limpio antes de
+abrir la siguiente.
+
+## E.7 Qué falta (no cubierto todavía en esta parte)
+
+- **El despliegue automático real** (GitHub Actions → cPanel al hacer
+  push/merge) — todavía no diseñado. La pieza más prometedora es la API
+  de cPanel (UAPI) con un **API Token** (cPanel → Manage API Tokens, más
+  seguro que usar la contraseña de la cuenta) para disparar un `git
+  pull` sobre el repositorio ya conectado con Git Version Control (E.3),
+  en vez de SSH directo.
+- **El merge `pre → prod`** — sigue siendo, a propósito, 100% manual
+  (mismo principio de toda esta guía), y el cPanel de producción
+  (separado por proyecto, ver arriba) todavía no se instaló en ningún
+  proyecto real.
+
 ---
 
 # Qué NO es parte de este sistema (a propósito)
 
-- **El deploy a servidor** — cada proyecto tiene su propio destino de
-  despliegue o ninguno; no es parte de este patrón.
 - **El merge a la rama principal** — siempre manual, sin excepción,
   incluso con el Coordinador de la Parte C instalado — llega hasta "PR
   listo", nunca lo mergea él. No hay ninguna configuración acá que lo
   automatice.
+- **El despliegue automático a producción** — la Parte E cubre cómo
+  levantar dev/preprod a mano; el `pre → prod` sigue siendo manual, sin
+  excepción, por el mismo principio.
 - **Confirmación de que funciona en cuentas distintas de la original**
   — este documento está escrito para que sea portable a cualquier cuenta
   (nada asume una cuenta específica), pero la validación en vivo
