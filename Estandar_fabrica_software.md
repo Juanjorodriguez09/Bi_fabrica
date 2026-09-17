@@ -669,11 +669,6 @@ falte autonomía, sino porque el destino (`pre`) todavía no existe.
   levantado, ver §10): merge a `pre` + entorno de pruebas UX con URL
   real (ver §4 — GitHub Pages no puede hospedar esto, necesita un
   servidor real).
-- Extender `pm-diario` para reconocer los comentarios del Coordinador
-  (bot, empiezan con `/aprobar`, contienen "Resolución de preguntas
-  abiertas") y armar una sección nueva en el dashboard — "Aprobado
-  automáticamente por el Coordinador" — para que el reporte diario que
-  ya se mira todos los días muestre qué hizo la fábrica sola.
 - Confirmar que aprobar varios planes a la vez efectivamente corre en
   paralelo (cada `/fire` debería ser una sesión independiente, pero no
   se probó explícitamente con 2-3 simultáneos).
@@ -742,6 +737,20 @@ tenga un hallazgo que sobreviva la primera corrección automática, más
 difícil de forzar a propósito que los otros flujos. Decisión explícita
 del usuario: dejarlo desplegado y confirmarlo la próxima vez que ocurra
 naturalmente, en vez de gastar una prueba sintética ahora.
+
+### 8.7 pm-diario/dashboard extendido — muestra qué decidió el Coordinador solo (2026-09-16)
+
+`pm-diario.md` ahora revisa, para cada Issue/PR (con los mismos
+comentarios que ya leía para clasificarlo, sin llamada nueva), si algún
+comentario empieza con `/aprobar`/`/ajustar` y fue posteado por una
+identidad bot — lo marca (`decidido_por_coordinador: true` en el JSON)
+sin cambiarle la categoría, y suma una línea nueva al reporte de texto
+por repo ("Decidido por el Coordinador, sin intervención humana"). El
+dashboard (`fabrica-status-dashboard/index.html`) agrega un badge por
+tarjeta y un KPI con el total del día, mismo patrón visual ya usado para
+`esfuerzo-chico`/`esfuerzo-grande`. **Sin validar visualmente en el
+sitio publicado todavía** — depende de la próxima corrida de la Routine
+diaria.
 
 ## 9. Modelo de IA según esfuerzo (2026-09-15)
 
