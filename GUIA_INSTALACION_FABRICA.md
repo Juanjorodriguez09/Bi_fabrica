@@ -2210,82 +2210,141 @@ con los pasos de UI siguientes.
 
 ## E.3 Por cada proyecto: la app Node.js (o el stack que use tu proyecto)
 
-**cPanel → Setup Node.js App → Create Application**, una por ambiente:
+**Orden recomendado, confirmado en vivo:** cloná el repo PRIMERO,
+recién después creá la app Node.js sobre esa misma carpeta — invertir
+este orden (crear la app y clonar después) es lo que rompe el
+`.htaccess`, ver el gotcha en E.5.
+
+**Paso A — clonar el repo.** cPanel → **Git™ Version Control → Create
+Repository**, con "Clone a Repository" activado:
+
+- **Clone URL**: la URL pública del repo (`https://github.com/<owner>/<repo>.git`
+  — si es privado, hace falta una credencial en la URL o una deploy key,
+  no cubierto acá).
+- **Repository Path**: la carpeta creada en E.1 (ej. `dev-<proyecto>`).
+
+**Gotcha real, confirmado en una cuenta cPanel recién creada:** el
+propio `Create A New Domain` de E.1 ya deja la carpeta con contenido
+(`.well-known/`, `Cgi-bin/` — scaffolding automático de cPanel), aunque
+todavía no hayas creado ninguna app Node ahí. El clone falla con
+`"You cannot use the '.../<carpeta>' directory because it already
+contains files."` **Antes de clonar**, andá al File Manager, entrá a
+esa carpeta, activá "Show Hidden Files (dotfiles)", seleccioná todo
+(incluidas `.well-known` y `Cgi-bin`) y borralo — son carpetas vacías
+de scaffolding, no tienen nada tuyo, borrarlas es seguro.
+
+Repetí para preprod, apuntando la rama que corresponda (dev suele ser
+`main`/`develop`; para preprod puede convenir crear una rama `pre`
+dedicada si no existe, mergeada manualmente desde `main` cuando algo
+está listo para promover) — en la pantalla "Administrar" del repo ya
+clonado, pestaña "Información básica", campo "Checked-Out Branch".
+
+**Paso B — recién ahora, crear la app.** cPanel → **Setup Node.js App
+→ Create Application**, una por ambiente:
 
 - **Node.js version**: la más nueva disponible (los frameworks
   modernos, Prisma incluido, no corren bien en versiones viejas tipo
   Node 10).
 - **Application mode**: `Development` para dev, `Production` para
   preprod.
-- **Application root**: la carpeta creada en E.1.
+- **Application root**: la carpeta creada en E.1, ya clonada en el
+  Paso A.
 - **Application URL**: el subdominio de E.1.
 - **Application startup file**: el archivo real de arranque de tu app
   (ej. `src/app.js`).
 - **Environment variables**: como mínimo `DATABASE_URL` (con la
-  credencial de E.2) y cualquier otra que tu app necesite (revisar
+  credencial de E.2 — **usá una contraseña 100% alfanumérica, ver el
+  gotcha en E.6**) y cualquier otra que tu app necesite (revisar
   `.env.example` del repo) — `NODE_ENV` lo pone solo el "Application
   mode" de arriba, no lo agregues a mano.
-
-Después de crear la app, conectá el código real con **Git™ Version
-Control** (nativo de cPanel, sección "Databases"... en realidad
-"Files") — **Create Repository**, con "Clone a Repository" activado:
-
-- **Clone URL**: la URL pública del repo (`https://github.com/<owner>/<repo>.git`
-  — si es privado, hace falta una credencial en la URL o una deploy key,
-  no cubierto acá).
-- **Repository Path**: la misma carpeta de E.1 (**tiene que estar
-  completamente vacía primero** — si "Setup Node.js App" ya puso ahí un
-  `app.js`/`package.json` de plantilla, borralo todo antes con File
-  Manager: Select All → Delete → mostrar archivos ocultos → borrar lo
-  que quede → Empty Trash).
-
-Repetí para preprod, apuntando la rama que corresponda (dev suele ser
-`main`/`develop`; para preprod puede convenir crear una rama `pre`
-dedicada si no existe, mergeada manualmente desde `main` cuando algo
-está listo para promover).
 
 Por último, en la app de "Setup Node.js App", corré **"Run NPM
 Install"**.
 
-## E.4 Gotcha real — `prisma generate` se cae por memoria (si tu proyecto usa Prisma)
+## E.4 Gotcha real — el motor "library" de Prisma (WASM) es inestable en hosting restringido (si tu proyecto usa Prisma)
 
 Muchos hostings compartidos con CloudLinux imponen un `ulimit -v` (típico:
-4GB) por cuenta. El motor de Prisma (desde ~v5.2x, basado en WASM) intenta
-reservar un bloque grande de memoria virtual de una sola vez al arrancar,
-sin importar cuánta memoria real vaya a usar — y falla con:
+4GB) por cuenta. El motor por defecto de Prisma desde ~v5.2x, llamado
+**"library"** (un `.so.node` cargado en el mismo proceso vía Node-API,
+basado en un runtime Rust/WASM), tiene dos síntomas distintos del mismo
+problema de fondo — no asumas que arreglar uno te libra del otro:
 
+**Síntoma 1, al generar el cliente:** `prisma generate` intenta reservar
+un bloque grande de memoria virtual de una sola vez al arrancar, sin
+importar cuánta memoria real vaya a usar, y falla con:
 ```
 RangeError: WebAssembly.Instance(): Out of memory: Cannot allocate Wasm memory for new instance
 ```
 
-**No es arreglable sin acceso root** (subir ese límite requiere WHM).
-Workaround, sin tocar el servidor:
+**Síntoma 2, real, confirmado en vivo (2026-09-17) — mucho más grave:**
+incluso con el cliente ya generado y cargando bien, **una consulta real
+en producción puede hacer paniquear el motor en tiempo de ejecución**,
+con una query tan simple como `prisma.modelo.findMany()` sin nada raro:
+```
+PANIC: timer has gone away
+This is a non-recoverable error which happens when the Prisma Query Engine has a panic.
+```
+Esto pasó al cargar un dashboard que dispara varias llamadas a la API en
+paralelo — cada una paniqueando el motor "library" (que corre EN el
+mismo proceso Node, vía Node-API) parece matar el proceso de forma más
+sucia que una excepción de JavaScript normal (confirmado por separado:
+un `throw`/`MODULE_NOT_FOUND` común no deja procesos pegados, se limpia
+solo). Con varias llamadas en paralelo paniqueando a la vez, alcanzó
+para agotar el límite de 75 procesos de la cuenta con una sola carga de
+página — el hallazgo más importante de todo este documento en cuanto a
+causa raíz del bloqueo de procesos.
 
-1. En tu máquina local, agregá el `binaryTarget` real del servidor a
-   `prisma/schema.prisma`:
-   ```prisma
-   generator client {
-     provider      = "prisma-client-js"
-     binaryTargets = ["native", "debian-openssl-1.0.x"]
-   }
-   ```
-   (El target exacto depende del servidor — confirmalo con el mensaje
-   de error que da Prisma al intentar cargar el cliente ahí: dice
-   explícitamente qué target detectó y cuál le falta. En un cPanel real
-   probado, el sistema operativo reportaba RHEL7 pero el `nodevenv` de
-   cPanel pedía `debian-openssl-1.0.x` — no asumas que coincide con el
-   SO que ves en `cat /etc/redhat-release`.)
-2. Corré `npx prisma generate` en tu máquina (sin la restricción de
-   memoria) — genera los binarios para los dos targets.
-3. Subí `node_modules/.prisma/client` ya generado al servidor por
+**No es un bug del código que escribas** — es una consulta de Prisma
+completamente estándar. Es una inestabilidad conocida del motor
+"library" en hosting con memoria/recursos restringidos.
+
+**Solución real, no un workaround — cambiar al motor "binary":** el
+motor binary es un ejecutable separado (`query-engine-<target>`, sin
+`.so.node`) que corre como proceso propio en vez de cargarse dentro del
+proceso Node — mucho más estable en este tipo de hosting, sin el panic
+de "timer has gone away":
+
+```prisma
+generator client {
+  provider      = "prisma-client-js"
+  engineType    = "binary"
+  binaryTargets = ["native", "debian-openssl-1.0.x"]
+}
+```
+
+(El target exacto depende del servidor — confirmalo con el mensaje
+de error que da Prisma al intentar cargar el cliente ahí: dice
+explícitamente qué target detectó y cuál le falta. En un cPanel real
+probado, el sistema operativo reportaba RHEL7 pero el `nodevenv` de
+cPanel pedía `debian-openssl-1.0.x` — no asumas que coincide con el
+SO que ves en `cat /etc/redhat-release`.)
+
+**El resto del workaround sigue igual** (generá localmente, subí por
+`rsync`, nunca corras `prisma generate` en el servidor — ver también el
+gotcha de `.npmrc`/`ignore-scripts` en E.6, necesario porque
+`@prisma/client` dispara `prisma generate` solo vía su propio
+`postinstall`, sin que nadie lo pida explícitamente):
+
+1. En tu máquina local, con `engineType = "binary"` ya en el schema,
+   corré `npx prisma generate` (sin la restricción de memoria del
+   servidor) — genera los binarios `query-engine-*` para los targets
+   configurados.
+2. Subí `node_modules/.prisma/client` ya generado al servidor por
    `rsync`/SCP, en vez de correr `prisma generate` ahí:
    ```bash
-   rsync -avz -e "ssh -i <tu-clave>" node_modules/.prisma/ usuario@servidor:<ruta-app>/node_modules/.prisma/
+   rsync -avz --delete -e "ssh -i <tu-clave> -p <puerto>" node_modules/.prisma/ usuario@servidor:<ruta-app>/node_modules/.prisma/
    ```
-4. Confirmá que carga sin error: `node -e "new (require('@prisma/client').PrismaClient)()"`
+   (`--delete` importa acá si estás migrando de motor library a binary
+   en una app que ya tenía el `.so.node` viejo subido — si no, quedan
+   los dos motores mezclados en el servidor sin necesidad.)
+3. Confirmá que carga sin error: `node -e "new (require('@prisma/client').PrismaClient)()"`
    dentro del entorno de la app (activalo con el comando que muestra la
    página de "Setup Node.js App", algo como
    `source ~/nodevenv/<app>/<version>/bin/activate && cd ~/<carpeta-app>`).
+4. **La prueba real no es solo instanciar el cliente — es hacer una
+   consulta real** (`$queryRaw` o `findMany` contra una tabla real). El
+   síntoma 2 solo aparece en runtime, con datos reales, no al
+   instanciar. Confirmalo antes de dar por cerrado el gotcha.
 
 ## E.5 Gotcha real — vaciar la carpeta de una app ya creada rompe el `.htaccess`
 
@@ -2311,36 +2370,117 @@ PassengerAppType node
 PassengerStartupFile <archivo-de-arranque>
 ```
 
-## E.6 Gotcha real — la cuenta puede agotar su límite de procesos con actividad normal
+## E.6 Gotcha real — contraseñas con caracteres especiales corrompen el `SetEnv`
+
+Las "Environment variables" que cargás en **Setup Node.js App** las
+escribe cPanel como directivas `SetEnv` dentro del `.htaccess` de la
+app (envueltas en `<IfModule Litespeed>` si el servidor es LiteSpeed —
+confirmalo con `curl -sI https://<tudominio>` y mirá el header
+`server:`, no asumas cuál es). Si la contraseña de la base de datos
+tiene ciertos caracteres especiales (confirmado con `{`, sospechoso
+también `?`/`;` por ser caracteres reservados en URLs), cPanel puede
+escribir mal la línea — en un caso real quedó insertado un **espacio
+antes del `@`** (`...contraseña @localhost...`), lo que rompe el
+parseo del `DATABASE_URL` con errores confusos tipo `PANIC: timer has
+gone away` del motor de Prisma, sin ningún mensaje que apunte a la
+causa real.
+
+**Evitarlo:** generá las contraseñas de base de datos (E.2) **100%
+alfanuméricas, sin ningún símbolo** — no confíes en que el generador de
+contraseñas de cPanel evite esto solo, revisá el resultado. Si ya
+creaste una con símbolos y algo no conecta, lo primero a mirar es el
+`.htaccess` de la app (`cat` por SSH, o File Manager con archivos
+ocultos visibles) para confirmar que la línea `SetEnv DATABASE_URL...`
+quedó exactamente como la escribiste.
+
+## E.7 Gotcha real — la cuenta puede agotar su límite de procesos, causa raíz confirmada
 
 Las cuentas cPanel compartidas con CloudLinux tienen un límite de
 **cantidad de procesos simultáneos** (no de memoria) — buscalo en
 **cPanel → Resource Usage → "Number Of Processes"**. Si llega a 100%,
 **absolutamente todo lo que necesite crear un proceso nuevo falla**
 (`cagefs_enter: Unable to fork`): SSH, Terminal, Resource Usage, crear
-una app nueva — no es un problema de una herramienta puntual.
+una app nueva — no es un problema de una herramienta puntual, y no hay
+forma de destrabarlo sin acceso root/WHM (subir el límite de procesos,
+NPROC, del paquete).
 
-Causa más probable: conexiones SSH cortadas de golpe (sin `exit` limpio)
-durante una sesión de configuración intensa, que dejan procesos colgados
-sin limpiarse. **No hay forma de destrabarlo sin acceso root/WHM** —
-cPanel no le da a una cuenta de usuario ninguna herramienta para ver o
-matar procesos ajenos, ni siquiera los propios. Si pasa: esperar un
-rato (la limpieza de la LVE puede tardar), y si no se libera, pedirle a
-quien tenga acceso root/WHM (o al soporte del hosting) que revise la
-cuenta.
+**Causa raíz confirmada en vivo (2026-09-17), reproducida de forma
+controlada:** no es tener varias apps activas, ni sesiones SSH mal
+cerradas (se descartó explícitamente — ver el detalle en E.4). Es el
+**panic del motor "library" de Prisma en tiempo de ejecución**
+("timer has gone away", ver E.4) — cargar una página que dispara varias
+consultas de Prisma en paralelo (típico de un dashboard) hizo que
+varias instancias del motor paniquearan al mismo tiempo, y eso agotó
+el cupo de 75 procesos con una sola carga de página. Reproducido dos
+veces en la misma sesión: 0 procesos en subdominios/BD/clone/npm
+install/rsync, salto directo a 75/75 solo al cargar el dashboard con el
+motor "library" activo.
 
-**Para evitarlo:** no encadenar muchas conexiones SSH automatizadas sin
-manejar bien el cierre, y dejar que una conexión termine limpio antes de
-abrir la siguiente.
+**La solución es la de E.4 (cambiar a `engineType = "binary"`), no
+subir el límite de procesos** — subir el límite tapa el síntoma pero no
+arregla que el motor siga paniqueando. Si tu proyecto no usa Prisma, o
+ya usás el motor binary y seguís topando el límite, ahí sí valdría la
+pena pedir subir el NPROC como estaba planteado antes.
 
-## E.7 Qué falta (no cubierto todavía en esta parte)
+**Mientras se aplica el fix, o si vuelve a pasar por otra causa:**
+esperar no lo resuelve (la limpieza de la LVE puede tardar mucho o no
+pasar) — hay que pedirle a quien tenga acceso root/WHM que libere la
+cuenta o suba el límite temporalmente. Pedir también que confirmen qué
+lo está consumiendo (`lveinfo` desde WHM) en vez de asumir.
 
-- **El despliegue automático real** (GitHub Actions → cPanel al hacer
-  push/merge) — todavía no diseñado. La pieza más prometedora es la API
-  de cPanel (UAPI) con un **API Token** (cPanel → Manage API Tokens, más
-  seguro que usar la contraseña de la cuenta) para disparar un `git
-  pull` sobre el repositorio ya conectado con Git Version Control (E.3),
-  en vez de SSH directo.
+**Reglas generales que siguen aplicando, más allá de esta causa
+puntual:**
+- No encadenar muchas conexiones SSH automatizadas sin manejar bien el
+  cierre, y dejar que una conexión termine limpio antes de abrir la
+  siguiente.
+- Mientras no esté confirmado que el fix de Prisma resolvió todo del
+  todo, mantené una sola app Node.js "Started" a la vez (dev o
+  preprod, nunca las dos) — Detener (no Destruir) la que no estés
+  usando desde Setup Node.js App antes de iniciar la otra.
+
+## E.8 Despliegue automático — diseñado (2026-09-17), sin probar en vivo todavía
+
+`.github/workflows/deploy-cpanel.yml` (reemplaza cualquier workflow viejo
+apuntando a otra infra, ej. Contabo/pm2, que ya no aplica): dispara con
+`push` a `main` (→ dev) o `pre` (→ preprod), nunca mergea nada — el merge
+sigue siendo 100% manual, esto solo actúa después de que ya se mergeó.
+
+**Decisión de diseño clave, a partir del incidente de E.7:** `npm ci` y
+`npx prisma generate` corren en el runner de GitHub Actions (sin límite
+de procesos ni de memoria), nunca en el cPanel compartido — el `rsync`
+sube `node_modules` ya armado. El servidor no vuelve a correr una
+instalación de dependencias ni el generate de Prisma en el flujo
+automático, lo que reduce el riesgo de repetir el bloqueo de procesos.
+Usa la acción `easingthemes/ssh-deploy` (ya estaba probada en el
+workflow viejo, action real y mantenida, no un endpoint de cPanel sin
+confirmar).
+
+**Gotcha evitado antes de que pase, no encontrado en vivo:** el rsync
+usa `--delete` para mantener el servidor igual al repo — sin excluir
+bien, borraría el `.htaccess` que genera "Setup Node.js App" (no vive
+en el repo de Git), repitiendo el gotcha de E.5. El `EXCLUDE` del
+workflow protege `.htaccess`, `tmp/` y `stderr.log` explícitamente.
+
+El restart de la app después del deploy es **tocar `tmp/restart.txt`**
+(mecanismo nativo de Phusion Passenger, el motor que usa "Setup
+Node.js App" — confirmado por las directivas `Passenger*` que ya vimos
+en el `.htaccess`), no hace falta ningún botón de la UI ni SSH aparte.
+
+**Secrets/variables nuevos a crear por repo** (Settings → Secrets and
+variables → Actions):
+- Secret `CPANEL_SSH_PRIVATE_KEY` — la clave privada ya autorizada en
+  la cuenta (ver E.3/gotcha de clave SSH).
+- Variables (no secrets, no son sensibles): `CPANEL_SSH_HOST`,
+  `CPANEL_SSH_PORT`, `CPANEL_SSH_USER`, `CPANEL_PATH_DEV`,
+  `CPANEL_PATH_PREPROD`.
+
+**Sin probar en vivo todavía** — depende de que el cPanel esté
+disponible (ver E.7, bloqueado por el límite de procesos al
+2026-09-17). Primera prueba real: push chico a `main` después de que
+se confirme que dev responde manualmente.
+
+## E.9 Qué falta (no cubierto todavía en esta parte)
+
 - **El merge `pre → prod`** — sigue siendo, a propósito, 100% manual
   (mismo principio de toda esta guía), y el cPanel de producción
   (separado por proyecto, ver arriba) todavía no se instaló en ningún
