@@ -1818,6 +1818,21 @@
     }
   }
 
+  // Corre las tareas con un máximo de `limit` en simultáneo en vez de todas
+  // a la vez — el hosting de dev/preprod tiene un límite bajo de procesos
+  // por cuenta, y disparar 12 requests concurrentes de una sola vez lo agota.
+  async function runWithConcurrencyLimit(taskFns, limit) {
+    let index = 0;
+    async function worker() {
+      while (index < taskFns.length) {
+        const current = index++;
+        await taskFns[current]();
+      }
+    }
+    const workers = Array.from({ length: Math.min(limit, taskFns.length) }, worker);
+    await Promise.all(workers);
+  }
+
   function loadAllData() {
     const dates = getDateRange(elements.dateRange.value);
     state.startDate = dates.startDate;
@@ -1831,20 +1846,20 @@
     // Apply config visibility
     applyResumenConfig();
 
-    Promise.all([
-      loadSummary(),
-      loadTrend(),
-      loadEvents(),
-      loadPages(),
-      loadClicks(),
-      loadReferrers(),
-      loadUtms(),
-      loadDevices(),
-      loadBrowsers(),
-      loadScroll(),
-      loadHeatmap(),
-      loadRealtime()
-    ]).then(() => {
+    runWithConcurrencyLimit([
+      loadSummary,
+      loadTrend,
+      loadEvents,
+      loadPages,
+      loadClicks,
+      loadReferrers,
+      loadUtms,
+      loadDevices,
+      loadBrowsers,
+      loadScroll,
+      loadHeatmap,
+      loadRealtime
+    ], 3).then(() => {
       // Update goals progress
       updateGoalsProgress();
 
