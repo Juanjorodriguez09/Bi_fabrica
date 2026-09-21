@@ -33,6 +33,7 @@ esto es genuinamente genérico, sin ningún contenido específico de
 | `.claude/skills/estandares-seguridad-fabrica/SKILL.md` | Este repo — genérico a propósito, no menciona nada de este dashboard. Cada proyecto nuevo lo interpreta una vez en su propio skill de calidad (marcando aplica/no aplica/gap por punto), como se hizo acá en `modelo-calidad-iso25010` §6 |
 | `.github/ISSUE_TEMPLATE/consulta-asesoria.yml` | Este repo — agregado 2026-09-07, a pedido del jefe del usuario. 100% genérico. Segundo tipo de Issue, distinto de "Solicitud de cambio": para pedidos de asesoría/recomendación que NO implican tocar código (label `consulta`, no `solicitud`) |
 | `.github/workflows/generar-asesoria.yml` | Este repo — agregado 2026-09-07, **corregido 2026-09-10**. 100% genérico. Dispara al subagente `asesor` (ver §2) cuando se abre un Issue con la label `consulta` — respuesta única con análisis/recomendación, sin plan de desarrollo ni PR, sin ciclo de `/aprobar`. La advertencia de "invocá al subagente de forma síncrona" quedó más débil que la de `generar-plan.yml` al escribirla — sin la frase "NO existe un más tarde" ni el ejemplo concreto de la falla — y el subagente terminó lanzándose en background en vivo (Issue creado vía Telegram: el turno dijo "voy a esperar su respuesta" y el job se completó sin publicar nada, `subagent_stats: started_in_background: 1, completed: 0`). Igualada a la redacción de `generar-plan.yml`, que no tuvo esta falla en ninguna de las pruebas de esta sesión |
+| `.github/workflows/deploy-cpanel.yml` | Este repo — agregado 2026-09-17, **para proyectos con backend Node.js**. 100% parametrizado (variables/secrets de repo, nada hardcodeado). `push` a `main` despliega a dev, `push` a `pre` despliega a preprod — nunca mergea nada, solo actúa después de un merge ya hecho a mano. Ver §10 para la variante de proyectos estáticos (sin backend) y el detalle completo de por qué está diseñado así |
 
 ## 1.1 Se copia, pero con referencias puntuales para ajustar
 
@@ -220,6 +221,27 @@ En orden — cada paso depende del anterior:
       `ROUTINE_COORDINADOR_ID` (Variable) — pestañas distintas, ver §8.4.
     - Agregar el paso 4.5 a las instrucciones de la Routine
       `implementar-plan-aprobado` de este repo (ver §8.1).
+11. **Armar los 3 ambientes (dev/preprod/prod) y el despliegue
+    automático** (agregado 2026-09-17/21, ver §10 para el detalle
+    completo y los gotchas) — **estándar para todo proyecto nuevo, no
+    opcional**:
+    - Subdominios `dev.`/`preprod.` del dominio de la cuenta cPanel del
+      proyecto (dev y preprod comparten cuenta; prod es una cuenta
+      cPanel separada por proyecto).
+    - Copiar `deploy-cpanel.yml` (backend Node) o su variante estática
+      (frontend sin backend propio, ver §10) — nunca escribirlo desde
+      cero para un proyecto nuevo.
+    - Secret `CPANEL_SSH_PRIVATE_KEY` + variables `CPANEL_SSH_HOST`,
+      `CPANEL_SSH_PORT`, `CPANEL_SSH_USER`, `CPANEL_PATH_DEV`,
+      `CPANEL_PATH_PREPROD` (mismos nombres en todo proyecto, así el
+      workflow no cambia).
+    - Directory Privacy (contraseña) en dev/preprod desde el arranque
+      si el proyecto tiene backend/base de datos real — no esperar a
+      que un bot lo encuentre (ver §10).
+    - **El merge sigue siendo, siempre, 100% manual** — esto solo
+      automatiza el despliegue después de un merge ya hecho a mano, no
+      el merge en sí. `pre → prod` también sigue siendo manual, sin
+      excepción.
 
 ## 3.1 Si el proyecto nuevo está en otra cuenta/organización de GitHub
 
@@ -785,7 +807,7 @@ Routine configurada con Opus. **Desplegado también en `WebChat_Fabrica`**
 explícita del usuario de no gastar una segunda prueba del mismo
 mecanismo ya confirmado.
 
-## 10. Entorno real de despliegue — cPanel dev/preprod (en progreso, 2026-09-16)
+## 10. Entorno real de despliegue — cPanel dev/preprod/prod (estándar, validado 2026-09-21)
 
 Primera vez que la fábrica sale de "todo vive en GitHub Actions" hacia
 un servidor real. El jefe dio acceso a un cPanel compartido
@@ -807,14 +829,14 @@ arquitectura de la fábrica en sí):
   revisar si siguen siendo públicos o si hace falta una deploy key.
 
 **Los pasos concretos, literales, están en `GUIA_INSTALACION_FABRICA.md`
-Parte D** (no acá — este documento es la bitácora de decisiones y
-gotchas, no el instructivo). Resumen de lo ya construido para
-`Bi_fabrica`: subdominios `dev.fabrica.micomercio.co`/
-`preprod.fabrica.micomercio.co`, 2 bases PostgreSQL con sus usuarios,
-app Node.js de dev corriendo, rama `pre` creada en el repo (no existía),
-clave SSH propia para despliegue futuro.
+Parte E** (no acá — este documento es la bitácora de decisiones y
+gotchas, no el instructivo). Validado de punta a punta en `Bi_fabrica`:
+subdominios dev/preprod, bases PostgreSQL con sus usuarios, apps
+Node.js corriendo, rama `pre` en el repo, clave SSH propia para
+despliegue, y el workflow de despliegue automático (ver más abajo)
+pusheado y confirmado.
 
-**Tres gotchas de plataforma reales, para no repetir el tiempo de
+**Gotchas de plataforma reales, para no repetir el tiempo de
 depuración:**
 
 1. **`prisma generate` se cae por memoria en este cPanel**
@@ -838,24 +860,82 @@ depuración:**
    app falla con `FileNotFoundError` desde el `cl_selector` de
    CloudLinux. Evitar: crear el Node app DESPUÉS de clonar el repo en la
    carpeta (no antes), o guardar ese archivo antes de vaciar la carpeta.
-3. **El límite de procesos (LVE) de una cuenta cPanel compartida puede
-   agotarse con actividad normal de configuración** (75/75 en este
-   caso, con solo 1 app corriendo) — probablemente por conexiones SSH
-   cortadas de golpe (no con `exit` limpio) que dejan procesos colgados
-   sin limpiarse. Cuando pasa, **absolutamente todo lo que necesite
-   forkear un proceso nuevo falla** (`cagefs_enter: Unable to fork`):
-   SSH, Terminal, Resource Usage, crear una app nueva — no es específico
-   de una sola herramienta. **No hay forma de destrabarlo sin acceso
-   root/WHM** — cPanel no le da a una cuenta de usuario ninguna
-   herramienta para ver/matar procesos ajenos. Evitar generar esta
-   situación: no encadenar comandos SSH automatizados sin manejar bien
-   la desconexión, y esperar a que una conexión termine limpio antes de
-   abrir la siguiente.
+3. **El límite de procesos (LVE) de una cuenta cPanel compartida se
+   agota fácil — pero la causa real casi nunca es SSH.** La primera
+   hipótesis (conexiones SSH cortadas de golpe) **se descartó con
+   evidencia** — se reprodujo el bloqueo varias veces con sesiones SSH
+   siempre cerradas limpio. Las causas reales, confirmadas una por
+   una, aislando variables (chequeo de procesos después de cada paso,
+   nunca varios cambios a la vez):
+   - **Motor "library"/"binary" de Prisma paniqueando en runtime**
+     (`PANIC: timer has gone away`, del crate `futures-timer`) — no
+     solo al generar el cliente (síntoma 1, gotcha #1 de arriba), sino
+     al ejecutar una consulta real, con el cliente ya generado y
+     funcionando. Confirmado que la misma query, mismo cliente,
+     ejecutada localmente por túnel SSH contra la misma base, no
+     paniquea nunca — es específico de correr el motor en Rust dentro
+     de este hosting (hipótesis: CPU throttling de CloudLinux). **Fix
+     real, no workaround: motor `driverAdapters` con
+     `@prisma/adapter-pg`** (JS puro sobre el paquete `pg`, sin motor
+     Rust) — ver `prisma/schema.prisma` y `src/lib/prisma.js` de
+     `Bi_fabrica` como referencia exacta. La versión de
+     `@prisma/adapter-pg` tiene que coincidir exacto con la de
+     `prisma`/`@prisma/client` (no tomar la última del paquete sin
+     verificar).
+   - **Un bot de escaneo de secretos, sin relación con el código.**
+     Tráfico externo genérico de internet (no dirigido a este proyecto)
+     probando rutas típicas de credenciales filtradas (`.env`,
+     `wp-config.php`, `aws.yml`, etc.) a 100+ requests/segundo durante
+     unos segundos — encontró el subdominio nuevo apenas quedó público.
+     **Fix: Directory Privacy (contraseña HTTP) en cualquier subdominio
+     dev/preprod que tenga backend/base de datos real**, desde el
+     arranque, no después de que pase. Coexiste sin problema con las
+     directivas `Passenger*`/`SetEnv` ya presentes en el `.htaccess`.
+   - **Concurrencia real del frontend, ya con el bug de Prisma
+     resuelto.** Una sola carga de página con varias llamadas
+     verdaderamente simultáneas (`Promise.all([...12 fetches...])`)
+     agota el límite igual — confirmado aislando con `/health` (sin
+     tocar base de datos) repetido 15 veces seguidas *secuenciales* sin
+     ningún problema, contra la misma carga con las 12 en paralelo sí.
+     **Fix: limitar la concurrencia del lado del cliente** (cola con
+     máximo 3 en vuelo a la vez en vez de todas de una) — no es algo
+     que el backend pueda resolver solo, es una responsabilidad del
+     código que arma las requests.
 
-**Bloqueado ahora mismo por el gotcha #3** — el usuario le escribió al
-jefe pidiendo que soporte del hosting libere la cuenta, o cree una
-cuenta nueva si es más rápido. Falta: la app Node de preprod, replicar
-todo en `WebChat_Fabrica` (mismo cPanel), y diseñar el despliegue
-automático real (GitHub Actions → cPanel, probablemente vía API Token de
-cPanel + `git pull` sobre el Git Version Control ya conectado, en vez de
-SSH directo) una vez destrabado.
+   Cuando el límite ya se agotó y quedó pegado (no baja solo):
+   **absolutamente todo lo que necesite forkear un proceso nuevo
+   falla** (`cagefs_enter: Unable to fork`, o en Node directamente
+   `fork: Resource temporarily unavailable`) — SSH, Terminal, Resource
+   Usage, crear una app nueva. **No hay forma de destrabarlo sin acceso
+   root/WHM** — si la cuenta es un plan Reseller (sin Terminal en WHM),
+   ni siquiera el dueño de la cuenta puede — hay que pedirle al hosting
+   que mate los procesos del lado de ellos.
+
+**Diseño del despliegue automático, ya construido y parametrizado —
+`.github/workflows/deploy-cpanel.yml`:** dispara con `push` a `main`
+(→ dev) o `pre` (→ preprod), nunca mergea nada — actúa después de un
+merge ya hecho a mano, el merge sigue siendo siempre manual. Para
+proyectos con backend Node.js: corre `npm ci`/`prisma generate` **en
+el runner de GitHub Actions** (sin límite de procesos ni memoria, a
+diferencia del cPanel) y sube el resultado ya armado por `rsync` —
+nunca instala ni genera nada pesado en el servidor compartido. El
+reinicio de la app es tocar `tmp/restart.txt` (mecanismo nativo de
+Phusion Passenger/LiteSpeed), no un botón de la UI.
+
+**Variante para proyectos estáticos (sin backend propio, ej.
+`WebChat_Fabrica`):** mucho más simple, y sin ninguna de las 3 causas
+de arriba — no hay Prisma, no hay concurrencia de backend que agote
+procesos, ni siquiera hace falta "Setup Node.js App". El paso de
+`npm ci`/`prisma generate` se reemplaza por `npm run build`, el
+`TARGET` del `rsync` es la carpeta pública del subdominio, y no hace
+falta ningún `SCRIPT_AFTER` de reinicio (no hay proceso que reiniciar).
+Directory Privacy es opcional en este caso — un bot escaneándolo solo
+recibe 404s inofensivos, no hay riesgo de agotar procesos.
+
+**Gotcha de DNS, si el subdominio no carga ni por http ni por
+https:** los subdominios nuevos tienen que ser hijos del dominio real
+de la cuenta cPanel (`algo.fabrica.micomercio.co`), nunca "hermanos"
+del mismo (`algo.micomercio.co`) — la cuenta no controla la zona DNS
+completa de `micomercio.co`, solo `fabrica.micomercio.co` y sus
+subdominios. Un dominio hermano no resuelve ni con certificado ni sin
+él, aunque los archivos estén bien subidos.

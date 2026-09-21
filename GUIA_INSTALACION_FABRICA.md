@@ -2261,6 +2261,15 @@ clonado, pestaña "Información básica", campo "Checked-Out Branch".
 Por último, en la app de "Setup Node.js App", corré **"Run NPM
 Install"**.
 
+**Variante para proyectos estáticos, sin backend propio** (ej. un
+frontend React/Vite que solo llama a una API externa, sin Prisma ni
+base de datos): mucho más simple, ni siquiera hace falta este Paso B —
+compilá localmente (`npm run build`), subí el contenido de `dist/` (o
+la carpeta de salida que use tu framework) directo a la carpeta del
+subdominio de E.1 por File Manager o `rsync`, y listo — el servidor
+web sirve los archivos estáticos sin ningún proceso Node corriendo.
+Ninguno de los gotchas de Prisma/procesos de esta parte aplica.
+
 ## E.4 Gotcha real — el motor "library" de Prisma (WASM) es inestable en hosting restringido (si tu proyecto usa Prisma)
 
 Muchos hostings compartidos con CloudLinux imponen un `ulimit -v` (típico:
@@ -2298,53 +2307,87 @@ causa raíz del bloqueo de procesos.
 completamente estándar. Es una inestabilidad conocida del motor
 "library" en hosting con memoria/recursos restringidos.
 
-**Solución real, no un workaround — cambiar al motor "binary":** el
-motor binary es un ejecutable separado (`query-engine-<target>`, sin
-`.so.node`) que corre como proceso propio en vez de cargarse dentro del
-proceso Node — mucho más estable en este tipo de hosting, sin el panic
-de "timer has gone away":
+**Intento de fix que NO funciona, confirmado en vivo — cambiar al motor
+"binary" no alcanza.** El motor `binary` (ejecutable separado,
+`query-engine-<target>`, sin `.so.node`) parece la solución obvia
+porque no corre dentro del proceso Node — pero **paniquea exactamente
+igual**, con el mismo "timer has gone away". Peor todavía: como cada
+consulta con motor binary spawnea un **proceso del sistema operativo
+aparte**, un panic ahí es directamente un proceso que muere mal — con
+varias consultas en paralelo paniqueando a la vez, esto agota el
+límite de procesos de la cuenta **más rápido** que con el motor
+library (que al menos panickea dentro del mismo proceso Node). No
+pierdas tiempo probando `engineType = "binary"` como solución.
+
+**Solución real, confirmada con una query real contra la base —
+reemplazar el motor por completo con `@prisma/adapter-pg`:** un
+adaptador que hace que Prisma hable con Postgres usando el paquete
+`pg` en JavaScript puro, sin ningún motor en Rust de por medio. Elimina
+la causa de raíz (el runtime async de Rust bajo CPU throttling), no la
+esquiva.
 
 ```prisma
 generator client {
-  provider      = "prisma-client-js"
-  engineType    = "binary"
-  binaryTargets = ["native", "debian-openssl-1.0.x"]
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+  binaryTargets   = ["native", "debian-openssl-1.0.x"]
 }
 ```
 
-(El target exacto depende del servidor — confirmalo con el mensaje
-de error que da Prisma al intentar cargar el cliente ahí: dice
-explícitamente qué target detectó y cuál le falta. En un cPanel real
-probado, el sistema operativo reportaba RHEL7 pero el `nodevenv` de
-cPanel pedía `debian-openssl-1.0.x` — no asumas que coincide con el
-SO que ves en `cat /etc/redhat-release`.)
+(`binaryTargets` hay que dejarlo igual, aunque el adaptador no use el
+motor para las queries — esta versión de Prisma sigue buscando/
+validando un binario del motor para el runtime del servidor, y sin
+esto tira un error de "could not locate the Query Engine" al arrancar.
+El target exacto depende del servidor — confirmalo con el mensaje de
+error que da Prisma al intentar cargar el cliente. En un cPanel real
+probado, el sistema operativo reportaba RHEL7 pero el `nodevenv` pedía
+`debian-openssl-1.0.x` — no asumas que coincide con el SO que ves en
+`cat /etc/redhat-release`.)
 
-**El resto del workaround sigue igual** (generá localmente, subí por
-`rsync`, nunca corras `prisma generate` en el servidor — ver también el
-gotcha de `.npmrc`/`ignore-scripts` en E.6, necesario porque
+```js
+// src/lib/prisma.js
+const { PrismaClient } = require('@prisma/client');
+const { PrismaPg } = require('@prisma/adapter-pg');
+const { Pool } = require('pg');
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const adapter = new PrismaPg(pool); // OJO: recibe el Pool directo, no { connectionString }
+const prisma = new PrismaClient({ adapter });
+
+module.exports = prisma;
+```
+
+**Gotcha real de versiones:** `@prisma/adapter-pg` tiene que ser
+**exactamente la misma versión** que `prisma`/`@prisma/client` (ej.
+todos `5.22.0`) — instalar la última versión del adaptador sin fijarla
+(que hoy puede ser una major distinta, como 7.x) rompe con
+`TypeError: Cannot read properties of undefined (reading 'bind')` al
+arrancar. Confirmalo con `npm list prisma @prisma/client @prisma/adapter-pg`.
+
+**El resto del workaround de siempre sigue igual** (generá localmente,
+subí por `rsync`, nunca corras `prisma generate` en el servidor — ver
+también el gotcha de `.npmrc`/`ignore-scripts` en E.6, necesario porque
 `@prisma/client` dispara `prisma generate` solo vía su propio
 `postinstall`, sin que nadie lo pida explícitamente):
 
-1. En tu máquina local, con `engineType = "binary"` ya en el schema,
-   corré `npx prisma generate` (sin la restricción de memoria del
-   servidor) — genera los binarios `query-engine-*` para los targets
-   configurados.
+1. En tu máquina local, con el adaptador ya configurado, corré
+   `npx prisma generate` (sin la restricción de memoria del servidor).
 2. Subí `node_modules/.prisma/client` ya generado al servidor por
    `rsync`/SCP, en vez de correr `prisma generate` ahí:
    ```bash
    rsync -avz --delete -e "ssh -i <tu-clave> -p <puerto>" node_modules/.prisma/ usuario@servidor:<ruta-app>/node_modules/.prisma/
    ```
-   (`--delete` importa acá si estás migrando de motor library a binary
-   en una app que ya tenía el `.so.node` viejo subido — si no, quedan
-   los dos motores mezclados en el servidor sin necesidad.)
+   (`--delete` importa si estás migrando de otro motor y ya había
+   binarios viejos subidos — si no, quedan mezclados sin necesidad.)
 3. Confirmá que carga sin error: `node -e "new (require('@prisma/client').PrismaClient)()"`
    dentro del entorno de la app (activalo con el comando que muestra la
    página de "Setup Node.js App", algo como
    `source ~/nodevenv/<app>/<version>/bin/activate && cd ~/<carpeta-app>`).
 4. **La prueba real no es solo instanciar el cliente — es hacer una
-   consulta real** (`$queryRaw` o `findMany` contra una tabla real). El
-   síntoma 2 solo aparece en runtime, con datos reales, no al
-   instanciar. Confirmalo antes de dar por cerrado el gotcha.
+   consulta real** (`$queryRaw` o `findMany` contra una tabla real) Y
+   **con varias en paralelo** (no una sola, secuencial) antes de dar
+   por cerrado el gotcha — ver E.9 más abajo, el panic solo aparece con
+   concurrencia real.
 
 ## E.5 Gotcha real — vaciar la carpeta de una app ya creada rompe el `.htaccess`
 
@@ -2438,7 +2481,76 @@ puntual:**
   preprod, nunca las dos) — Detener (no Destruir) la que no estés
   usando desde Setup Node.js App antes de iniciar la otra.
 
-## E.8 Despliegue automático — diseñado (2026-09-17), sin probar en vivo todavía
+## E.8 Gotcha real — un bot encuentra y ataca el subdominio nuevo en horas
+
+Apenas un subdominio queda público (DNS resuelto), bots automatizados
+de internet (escaneo masivo, no dirigido a tu proyecto) lo encuentran
+solos y lo golpean a 100+ requests/segundo probando rutas típicas de
+credenciales filtradas: `.env`, `wp-config.php`, `aws.yml`,
+`terraform.tfstate`, `id_rsa`, `credentials.json`, etc. Confirmado en
+vivo: encontró un subdominio nuevo en menos de un día. Si tu app tiene
+un catch-all que sirve `index.html` para cualquier ruta no-API (patrón
+común de SPA), **cada uno de esos cientos de requests llega a tu app
+Node** — con suficiente volumen, agota el límite de procesos de la
+cuenta igual que una carga de tráfico real.
+
+**Fix: Directory Privacy (contraseña HTTP) en cualquier subdominio
+dev/preprod con backend/base de datos real, desde el arranque —
+cPanel → "Privacidad del directorio"** → marcar el checkbox → crear un
+usuario/contraseña. Se guarda como `AuthType Basic`/`AuthUserFile` en
+el `.htaccess` de esa carpeta — coexiste sin problema con las
+directivas `Passenger*`/`SetEnv` que ya puso "Setup Node.js App", cada
+una en su propio bloque. Confirmalo abriendo el `.htaccess` después.
+
+Si el proyecto es un **sitio estático sin backend propio** (ver E.3
+variante estática más abajo), este paso es opcional — un bot
+escaneándolo solo recibe 404s inofensivos del servidor web, nunca
+llega a ejecutar código tuyo.
+
+## E.9 Gotcha real — una sola carga de página con requests en paralelo agota el límite, incluso sin ningún bug de Prisma
+
+Con el motor de Prisma ya arreglado (E.4) y el bot bloqueado (E.8),
+**cargar el frontend una sola vez puede seguir agotando el límite de
+procesos.** No es un bug de código en el sentido de "está mal
+escrito" — es que el hosting compartido no tolera bien la concurrencia
+real.
+
+**Cómo aislarlo con certeza, sin adivinar:** pegale a un endpoint que
+NO toque la base de datos (ej. `/health`) 10-15 veces **seguidas, una
+después de la otra** — si nunca sube el número de procesos, descartá
+que sea el manejo de requests secuenciales del hosting. Después cargá
+la pantalla real que dispara varias llamadas — si ahí sí sube, el
+problema es específicamente la **concurrencia verdadera** (varias
+requests en vuelo al mismo tiempo), no la cantidad total de requests.
+
+Buscá en tu frontend patrones como:
+```js
+Promise.all([fetchA(), fetchB(), fetchC(), /* ...10 más... */])
+```
+Eso dispara todas las llamadas genuinamente en simultáneo. **Fix:
+limitar la concurrencia con una cola simple** (2-4 en vuelo a la vez
+en vez de todas de una) — mismos datos, mismo orden lógico, sin
+cambiar la lógica de negocio:
+
+```js
+async function runWithConcurrencyLimit(taskFns, limit) {
+  let index = 0;
+  async function worker() {
+    while (index < taskFns.length) {
+      const current = index++;
+      await taskFns[current]();
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, taskFns.length) }, worker));
+}
+```
+
+Antes de asumir que es esto, descartá con `pg_stat_activity` (via
+phpPgAdmin: `SELECT state, count(*) FROM pg_stat_activity GROUP BY
+state;`) que no sean conexiones de Postgres colgadas — es una causa
+distinta con el mismo síntoma, y confundir las dos hace perder tiempo.
+
+## E.10 Despliegue automático — diseñado (2026-09-17), sin probar en vivo todavía
 
 `.github/workflows/deploy-cpanel.yml` (reemplaza cualquier workflow viejo
 apuntando a otra infra, ej. Contabo/pm2, que ya no aplica): dispara con
@@ -2479,7 +2591,7 @@ disponible (ver E.7, bloqueado por el límite de procesos al
 2026-09-17). Primera prueba real: push chico a `main` después de que
 se confirme que dev responde manualmente.
 
-## E.9 Qué falta (no cubierto todavía en esta parte)
+## E.11 Qué falta (no cubierto todavía en esta parte)
 
 - **El merge `pre → prod`** — sigue siendo, a propósito, 100% manual
   (mismo principio de toda esta guía), y el cPanel de producción
