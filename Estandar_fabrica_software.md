@@ -15,6 +15,33 @@ se escribe y el PR se abre solo → 3 subagentes revisan el PR solos y
 comentan los hallazgos → si hay algo real y grave, se corrige solo (una
 vez) → **el merge final sigue siendo, siempre, una decisión 100% manual**.
 
+## 0.1 Regla de arquitectura: qué es central y qué es por-proyecto (sin excepciones)
+
+Esta regla aplica a **todo proyecto nuevo, sin excepción** — no es una
+preferencia caso por caso, es la arquitectura de la fábrica:
+
+**Centralizados — un solo agente para toda la fábrica, viven en el repo
+hub `fabrica-status`, nunca se duplican por proyecto:**
+- **`pm-diario`** (§7) — recorre todos los proyectos él mismo, no
+  tendría sentido uno por repo.
+- **`coordinador`** (§8) — clona el repo del Issue que le toca revisar
+  al vuelo; un Coordinador por repo se probó y se descartó
+  explícitamente a favor de este diseño central (ver §8.2).
+
+**Por proyecto — viven en `.claude/agents/` de cada repo, se
+reescriben siempre, nunca se copian ni se comparten entre proyectos:**
+`planificador`, `revisor-codigo`, `documentador`, `tester`, `asesor`
+(ver §2). La razón: necesitan conocimiento real del stack/código de
+ese proyecto específico para ser útiles — un agente genérico sin ese
+contexto solo puede producir generalidades, no un plan o una revisión
+de verdad accionable.
+
+**Regla práctica para cuando se diseñe una pieza nueva** (agente,
+workflow, lo que sea): evaluar primero si puede ser central (un solo
+lugar, todos los proyectos) — solo va por-proyecto si de verdad
+necesita conocimiento profundo y específico del código de ese
+proyecto para funcionar bien.
+
 ## 1. Qué se copia tal cual (sin editar nada)
 
 **Corregido 2026-08-24, con evidencia real** (segundo proyecto,
