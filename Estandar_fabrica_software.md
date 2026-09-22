@@ -816,6 +816,56 @@ tarjeta y un KPI con el total del día, mismo patrón visual ya usado para
 sitio publicado todavía** — depende de la próxima corrida de la Routine
 diaria.
 
+### 8.8 El Coordinador ya no dispara al instante — margen de 20 min para el humano (2026-09-22)
+
+**Confirmado en vivo (WebChat_Fabrica Issue #27):** el diseño original
+(`coordinador-avisar-plan.yml`/`coordinador-avisar-ajuste.yml`, on:
+`issue_comment: created`) disparaba al Coordinador **9 segundos** después
+de que el planificador posteara un plan — y el Coordinador terminaba de
+decidir y comentar en **~90 segundos** más. En la práctica, el humano
+nunca tenía margen real para responder las preguntas abiertas él mismo
+antes de que el Coordinador ya las hubiera resuelto. Esto contradice el
+propósito del Coordinador: es un **respaldo** para cuando el humano no
+actúa, no una carrera contra él.
+
+**Cambio:** los dos workflows de disparo instantáneo se eliminaron.
+Reemplazados por un único workflow programado por repo,
+`.github/workflows/coordinador-vigilar.yml` (`cron: '*/15 * * * *'` +
+`workflow_dispatch`), que:
+- Lista Issues/PRs abiertos con `gh api` (REST, mismo motivo que siempre
+  — GraphQL bloqueado en las Routines, no en el runner de Actions).
+- Para cada uno, mira el **último comentario**: si es de un bot, tiene
+  `## Objetivo` sin `/aprobar` (Issue) o `🧭 ESPERANDO_DECISION` (PR), y
+  **lleva 20+ minutos ahí sin respuesta humana**, recién ahí llama
+  `/fire` sobre `coordinador-central` — exactamente el mismo payload que
+  antes.
+- Es idempotente en la práctica: en cuanto el Coordinador comenta, el
+  último comentario deja de cumplir la condición, así que el próximo
+  chequeo (15 min después) ya no lo vuelve a disparar. Con el Coordinador
+  terminando en ~90s, el margen de 15 min entre chequeos hace ese riesgo
+  de doble disparo despreciable.
+- Aplicado igual en `Bi_fabrica` y `WebChat_Fabrica` — mecanismo
+  estandarizado, no a medida de un repo (ver `[[feedback_estandarizar_vs_a_medida]]`).
+
+**Bug real encontrado y corregido en el mismo repaso** (en
+`coordinador.md`, el único lugar donde vive): el comando documentado para
+postear la decisión (`gh issue comment ... --body-file archivo`) falla
+con un 403 de GraphQL bloqueado en la sesión de la Routine — igual que
+los comandos ya documentados como bloqueados en `pm-diario.md`, pero que
+acá no estaba contemplado. El Coordinador improvisó un fallback
+(`gh api ... -f body=@archivo`) que **no lee el archivo con `-f`** (solo
+`-F` lo hace) — posteó el texto `@/tmp/decision.txt` literal en un Issue
+real (WebChat_Fabrica #27), atribuido al usuario humano porque
+`GH_TOKEN_COORDINADOR` es un PAT bajo su propia cuenta, no una identidad
+bot separada. Corregido: el único patrón válido para publicar ahora es
+
+```bash
+jq -Rs '{body: .}' /tmp/decision.txt | GH_TOKEN="$GH_TOKEN_COORDINADOR" gh api "repos/<owner>/<repo>/issues/<numero>/comments" --input -
+```
+
+que arma el JSON explícitamente y no depende de que `gh` interprete el
+`@`.
+
 ## 9. Modelo de IA según esfuerzo (2026-09-15)
 
 No es un ahorro de costo — es un upgrade selectivo de capacidad para el
