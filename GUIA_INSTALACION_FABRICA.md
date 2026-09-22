@@ -1261,8 +1261,14 @@ ver B.4.
 Esto se instala **una vez**, no por proyecto. Recorre todos los repos de
 la Parte A que le vayas conectando y publica un reporte diario: qué está
 pausado esperando una decisión, qué PR falta revisar/mergear, qué Issue
-nunca recibió un plan, qué está estancado. En tres canales: un Issue fijo
-de GitHub, Telegram, y un dashboard visual público.
+nunca recibió un plan, qué está estancado. En dos canales por defecto: un
+Issue fijo de GitHub y un dashboard visual público — **Telegram queda
+deliberadamente afuera del reporte diario** (decisión explícita, ver
+B.3): si el mismo bot de Telegram se usa también para CREAR Issues
+(flujo aparte, armado en n8n — no cubierto todavía en esta guía, ver
+nota al final de B.3), mandar además el reporte completo todos los días
+por ese chat lo llena de ruido. Telegram sigue siendo opcional como
+tercer canal del reporte diario si de verdad lo querés (ver B.3).
 
 ## B.0 Qué se crea, de un vistazo
 
@@ -1271,8 +1277,8 @@ de GitHub, Telegram, y un dashboard visual público.
 - Un Issue fijo en el repo hub.
 - Tres Personal Access Tokens de GitHub, cada uno con el mínimo acceso
   posible.
-- Credenciales de un bot de Telegram (opcional, solo si querés ese
-  canal).
+- Credenciales de un bot de Telegram (opcional — por defecto NO se usa
+  para el reporte diario, ver B.3).
 - Un Environment y una Routine con horario.
 
 ## B.1 Crear los dos repos
@@ -1299,17 +1305,29 @@ expiración".**
 | `GH_TOKEN_STATUS` | Solo el repo hub | `Issues: Read and write` |
 | `GH_TOKEN_DASHBOARD` | Solo el repo del dashboard | `Contents: Read and write` |
 
-## B.3 Credenciales de Telegram (opcional)
+## B.3 Credenciales de Telegram (opcional, y no recomendado para el reporte diario)
 
-Si querés el canal de Telegram, necesitás:
+**Recomendación por defecto: NO uses Telegram para el reporte diario.**
+Si el mismo bot de Telegram sirve también para que la gente cree Issues
+por chat (flujo de n8n, no cubierto en esta guía — armá un workflow que
+escuche un mensaje/palabra clave y llame a la API de "Create Issue" de
+GitHub, usando el mismo bot token), mandar además el reporte completo
+todos los días por ese mismo chat lo llena de ruido — un canal para
+"pedir cosas", otro para "ver el estado", no mezclados. Esta guía asume
+por defecto que el reporte diario va solo al Issue de GitHub y al
+dashboard (B.0), sin Telegram.
+
+Si aun así querés el canal de Telegram para el reporte (por ejemplo, un
+chat de equipo separado del que crea Issues), necesitás:
 1. Un bot: hablale a `@BotFather` en Telegram, `/newbot`, seguí las
    instrucciones, te da un token (`123456:ABC-...`).
 2. Tu `chat_id`: mandale cualquier mensaje al bot, después abrí en el
    navegador `https://api.telegram.org/bot<TU_TOKEN>/getUpdates` y buscá
    `"chat":{"id": ...}` en la respuesta.
-
-Si no querés Telegram, salteá este paso y sacá la parte de Telegram de
-las instrucciones del subagente en B.5 y de la Routine en B.7.
+3. Agregá de vuelta el paso de Telegram a las instrucciones del subagente
+   en B.5 ("Publicación") y las variables `TELEGRAM_BOT_TOKEN`/
+   `TELEGRAM_CHAT_ID` a la Routine en B.7 — el contenido embebido de esta
+   guía ya viene sin ese paso, por la recomendación de arriba.
 
 ## B.4 Placer el subagente en el repo hub
 
