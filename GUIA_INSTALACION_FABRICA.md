@@ -958,9 +958,37 @@ jobs:
             NO escribas código, NO corrijas nada tú mismo, NO abras otra rama ni PR —
             tu única salida es el comentario de revisión y, cuando corresponda, el
             disparo de la Routine de corrección.
+
+            ÚLTIMO PASO OBLIGATORIO, antes de terminar tu turno: este job de GitHub
+            Actions termina apenas vos terminás de responder — no hay ninguna otra
+            oportunidad de arreglarlo después, ni un humano revisando que lo hiciste
+            bien antes de que el job se marque "success". Un job que termina
+            "success" sin haber publicado el comentario (o sin haber disparado la
+            Routine cuando correspondía) es un fallo silencioso — nadie se entera,
+            porque GitHub solo ve que el proceso no crasheó. Por eso, literalmente en
+            tu último mensaje, confirmate a vos mismo con una lista explícita antes de
+            escribir tu respuesta final:
+            - ¿Ejecuté `gh pr comment` con el comentario consolidado completo? Si la
+              respuesta es "no" o "no estoy seguro" — ejecutalo ahora, no lo des por
+              hecho ni lo menciones como algo que "ibas a hacer".
+            - Si correspondía disparar la corrección automática, ¿ejecuté el `curl`?
+              Mismo criterio: si no estás seguro de haberlo corrido, correlo ahora
+              antes de responder.
         env:
           FIX_PR_ROUTINE_API_TOKEN: ${{ secrets.FIX_PR_ROUTINE_API_TOKEN }}
 ```
+
+**Hallazgo real, confirmado en vivo (2026-09-22):** este workflow reportó
+"success" dos veces sin cumplir lo pedido (no disparó la corrección
+automática pese a un hallazgo etiquetado `REAL/CRÍTICO`, y en otra
+corrida no publicó el comentario de re-revisión) — sin acceso a los logs
+detallados del step no se pudo confirmar la causa exacta, pero el patrón
+coincide con el mismo tipo de fallo silencioso ya visto y corregido antes
+en `generar-asesoria.yml` (un job de un solo turno que termina sin haber
+hecho lo que se le pidió, y GitHub lo marca "success" igual). El párrafo
+"ÚLTIMO PASO OBLIGATORIO" de arriba ya incluye el fix — si vuelve a pasar
+después de esto, es señal de que hace falta reforzarlo más, no de que el
+mecanismo esté bien.
 
 **Los dos ajustes que tenés que hacer vos, según tu proyecto:**
 
@@ -1043,7 +1071,16 @@ Cada archivo va en .claude/agents/<nombre>.md salvo el último.
    sincronizada con el código real. No redacta desde cero — detecta y
    corrige divergencias. Usa `git diff`/`git log` para ver qué cambió,
    ubica la sección correspondiente, y edita solo lo que divergió sin
-   reescribir secciones que siguen siendo ciertas.
+   reescribir secciones que siguen siendo ciertas. Si esa documentación
+   todavía no tiene una sección para algo que el proyecto ya tiene (por
+   ejemplo, arranca vacía o con el scaffold por defecto del framework),
+   agregala — pero solo para lo que ya existe en el código, nunca para
+   funcionalidad planeada. Aclarale explícitamente: cuando lo invoquen en
+   modo "solo diagnóstico, sin aplicar cambios" (como pasa al revisar un
+   PR), esta misma regla no se salta — si nota un hueco así, tiene que
+   decirlo como recomendación explícita en su reporte, nunca descartarlo
+   como "no aplica"/"fuera de alcance de este PR" solo porque el hueco ya
+   existía antes de ese cambio puntual.
 
 4. `.claude/agents/tester.md` — subagente que verifica manualmente que
    el sistema sigue funcionando después de un cambio, levantando el
@@ -1615,11 +1652,11 @@ primera por ahora):
     revisar.
     ```
 - **En cada repo de proyecto de la Parte A**: un workflow chico que
-  avisa, más dos valores de configuración, más un cambio a
-  `disparar-routine.yml`, más un paso nuevo en la Routine
-  `implementar-plan-aprobado` — ver C.3. Si instalás también C.7: otro
-  workflow chico más, más un cambio a `ajustar-pr.yml` y a
-  `revisar-pr.yml`.
+  avisa (programado, no instantáneo — ver C.3), más dos valores de
+  configuración, más un cambio a `disparar-routine.yml`, más un paso
+  nuevo en la Routine `implementar-plan-aprobado`. Si instalás también
+  C.7: un cambio a `ajustar-pr.yml` y a `revisar-pr.yml` — el workflow de
+  C.3 ya cubre la Tarea 2 sin archivos nuevos.
 
 ## C.2 `.claude/agents/coordinador.md` (repo hub)
 
@@ -1751,9 +1788,19 @@ Plan aprobado con estas resoluciones.
 revisó sin objeciones — siempre empezando la primera línea con
 `/aprobar`.)
 
+Publicalo con (NUNCA `gh issue comment`/`gh pr comment`: en la sesión de
+la Routine fallan con un 403 de GraphQL bloqueado — confirmado en vivo.
+Tampoco uses `gh api ... -f body=@archivo`: con `-f`, gh NO lee el
+archivo, postea el texto `@archivo` literal — confirmado en vivo, causó
+un comentario roto en un Issue real. Usá siempre este patrón, que arma
+el JSON explícito y no depende de que `gh` interprete el `@`):
+
 ```bash
-GH_TOKEN="$GH_TOKEN_COORDINADOR" gh issue comment <numero> --repo <owner>/<repo> --body-file /tmp/decision.txt
+jq -Rs '{body: .}' /tmp/decision.txt | GH_TOKEN="$GH_TOKEN_COORDINADOR" gh api "repos/<owner>/<repo>/issues/<numero>/comments" --input -
 ```
+
+(Funciona igual para un PR — el endpoint de comentarios de Issues y PRs
+es el mismo por número.)
 
 ## Registrar la decisión (si fue relevante)
 
@@ -1818,11 +1865,12 @@ verificar el hallazgo contra el código real. Armá el comentario:
 <instrucción concreta de qué corregir, citando el hallazgo REAL/CRÍTICO exacto del comentario de revisión — archivo:línea cuando aplique>
 ```
 
-```bash
-GH_TOKEN="$GH_TOKEN_COORDINADOR" gh pr comment <numero> --repo <owner>/<repo> --body-file /tmp/decision.txt
-```
+Publicalo con el mismo patrón de la Tarea 1 (nunca `gh pr comment`,
+mismo motivo):
 
-(`gh pr comment` funciona igual que `gh issue comment` para un PR.)
+```bash
+jq -Rs '{body: .}' /tmp/decision.txt | GH_TOKEN="$GH_TOKEN_COORDINADOR" gh api "repos/<owner>/<repo>/issues/<numero>/comments" --input -
+```
 
 ### Escalar a un humano
 
@@ -1831,7 +1879,7 @@ para que no dispare nada) y agregá la label `esperando-humano` (ya
 existe en el repo, se crea en A.4):
 
 ```bash
-GH_TOKEN="$GH_TOKEN_COORDINADOR" gh pr comment <numero> --repo <owner>/<repo> --body-file /tmp/decision.txt
+jq -Rs '{body: .}' /tmp/decision.txt | GH_TOKEN="$GH_TOKEN_COORDINADOR" gh api "repos/<owner>/<repo>/issues/<numero>/comments" --input -
 GH_TOKEN="$GH_TOKEN_COORDINADOR" gh pr edit <numero> --repo <owner>/<repo> --add-label "esperando-humano"
 ```
 
@@ -1861,37 +1909,85 @@ Todavía sin entradas.
 
 ## C.3 En cada repo de proyecto
 
-### `.github/workflows/coordinador-avisar-plan.yml`
+### `.github/workflows/coordinador-vigilar.yml`
+
+**No dispares al Coordinador al instante en que aparece un plan o un
+ajuste pendiente** (el diseño original de esta guía lo hacía con
+`on: issue_comment`, evento inmediato) — confirmado en vivo (2026-09-22):
+eso le gana de mano al humano en menos de 2 minutos, sin darle ninguna
+oportunidad real de decidir él mismo antes. El Coordinador es un
+**respaldo** para cuando el humano no actúa, no una carrera contra él.
+Este workflow único corre cada 15 minutos y solo avisa si un plan/PR
+lleva **20+ minutos** sin respuesta humana. El bloque de Tarea 2 (PRs con
+`🧭 ESPERANDO_DECISION`) no hace nada hasta que instales C.7 — es
+inofensivo dejarlo desde ahora, simplemente no va a encontrar nada que
+matchee.
 
 ```yaml
-name: Avisar al Coordinador central de un plan nuevo
+name: Vigilar planes/PRs estancados y avisar al Coordinador
 
 on:
-  issue_comment:
-    types: [created]
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch: {}
 
 permissions:
   contents: read
-  issues: write
+  issues: read
+  pull-requests: read
 
 jobs:
-  avisar_coordinador:
-    if: >
-      github.event.issue.pull_request == null &&
-      github.event.comment.user.type == 'Bot' &&
-      contains(github.event.comment.body, '## Objetivo') &&
-      !startsWith(github.event.comment.body, '/aprobar')
+  vigilar:
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+      COORDINADOR_API_TOKEN: ${{ secrets.COORDINADOR_API_TOKEN }}
+      ROUTINE_COORDINADOR_ID: ${{ vars.ROUTINE_COORDINADOR_ID }}
     steps:
-      - name: 🧭 Avisar al Coordinador central vía API
+      - name: Revisar Issues con plan sin aprobar (Tarea 1) y PRs esperando decisión (Tarea 2)
         run: |
-          RESPONSE=$(curl -s -X POST "https://api.anthropic.com/v1/claude_code/routines/${{ vars.ROUTINE_COORDINADOR_ID }}/fire" \
-            -H "Authorization: Bearer ${{ secrets.COORDINADOR_API_TOKEN }}" \
-            -H "anthropic-beta: experimental-cc-routine-2026-04-01" \
-            -H "anthropic-version: 2023-06-01" \
-            -H "Content-Type: application/json" \
-            -d "{\"text\": \"Hay un plan nuevo para revisar en el Issue #${{ github.event.issue.number }} de ${{ github.repository }}. Repo completo: ${{ github.repository }}. Revisalo y decidí si aprobarlo, resolviendo cualquier pregunta abierta que tenga.\"}")
-          echo "$RESPONSE"
+          set -euo pipefail
+          GRACIA_SEGUNDOS=$((20 * 60))
+          AHORA=$(date -u +%s)
+
+          avisar_coordinador() {
+            local texto="$1"
+            curl -s -X POST "https://api.anthropic.com/v1/claude_code/routines/${ROUTINE_COORDINADOR_ID}/fire" \
+              -H "Authorization: Bearer ${COORDINADOR_API_TOKEN}" \
+              -H "anthropic-beta: experimental-cc-routine-2026-04-01" \
+              -H "anthropic-version: 2023-06-01" \
+              -H "Content-Type: application/json" \
+              -d "$(jq -n --arg text "$texto" '{text: $text}')"
+            echo
+          }
+
+          echo "== Tarea 1: Issues con plan sin aprobar =="
+          for numero in $(gh api "repos/${REPO}/issues?state=open&per_page=100" --jq '.[] | select(.pull_request == null) | .number'); do
+            ULTIMO=$(gh api "repos/${REPO}/issues/${numero}/comments?per_page=100" --jq 'last')
+            [ "$ULTIMO" = "null" ] && continue
+            ES_BOT=$(echo "$ULTIMO" | jq -r '.user.type == "Bot"')
+            TIENE_PLAN=$(echo "$ULTIMO" | jq -r '.body | contains("## Objetivo")')
+            ES_APROBACION=$(echo "$ULTIMO" | jq -r '.body | startswith("/aprobar")')
+            CREADO_EPOCH=$(date -u -d "$(echo "$ULTIMO" | jq -r '.created_at')" +%s)
+            if [ "$ES_BOT" = "true" ] && [ "$TIENE_PLAN" = "true" ] && [ "$ES_APROBACION" = "false" ] && [ $((AHORA - CREADO_EPOCH)) -ge "$GRACIA_SEGUNDOS" ]; then
+              echo "Issue #${numero}: plan sin aprobar hace más de 20 min — avisando al Coordinador"
+              avisar_coordinador "Hay un plan nuevo para revisar en el Issue #${numero} de ${REPO}. Repo completo: ${REPO}. Revisalo y decidí si aprobarlo, resolviendo cualquier pregunta abierta que tenga."
+            fi
+          done
+
+          echo "== Tarea 2: PRs esperando decisión de ajuste (solo si instalaste C.7) =="
+          for numero in $(gh api "repos/${REPO}/pulls?state=open&per_page=100" --jq '.[].number'); do
+            ULTIMO=$(gh api "repos/${REPO}/issues/${numero}/comments?per_page=100" --jq 'last')
+            [ "$ULTIMO" = "null" ] && continue
+            ES_BOT=$(echo "$ULTIMO" | jq -r '.user.type == "Bot"')
+            ESPERANDO=$(echo "$ULTIMO" | jq -r '.body | contains("🧭 ESPERANDO_DECISION")')
+            CREADO_EPOCH=$(date -u -d "$(echo "$ULTIMO" | jq -r '.created_at')" +%s)
+            if [ "$ES_BOT" = "true" ] && [ "$ESPERANDO" = "true" ] && [ $((AHORA - CREADO_EPOCH)) -ge "$GRACIA_SEGUNDOS" ]; then
+              echo "PR #${numero}: esperando decisión hace más de 20 min — avisando al Coordinador"
+              avisar_coordinador "El PR #${numero} de ${REPO} tiene hallazgos reales de revisión sin corregir, y ya se usó el intento automático de corrección. Repo completo: ${REPO}. Revisá el hilo del PR y decidí si pedís un ajuste más (con /ajustar) o si esto queda esperando una decisión humana."
+            fi
+          done
 ```
 
 ### Modificar `disparar-routine.yml` (ya existe, de la Parte A)
@@ -1953,12 +2049,13 @@ Cinco pasos, todos en el repo nuevo (además de tenerlo ya instalado con
 la Parte A):
 1. Agregar el repo al scope del PAT `GH_TOKEN_COORDINADOR`.
 2. Conectarlo a la Routine `coordinador-central` (botón `+`).
-3. Copiar `coordinador-avisar-plan.yml` (C.3) tal cual.
+3. Copiar `coordinador-vigilar.yml` (C.3) tal cual.
 4. Aplicar el mismo diff a `disparar-routine.yml` del repo nuevo.
 5. Agregar los secrets/vars y el paso 4.5, igual que en C.4.
 
-Si instalaste también C.7, sumale además sus 3 piezas (workflow nuevo +
-2 diffs) al repo nuevo — mismo criterio, copiar/aplicar tal cual.
+Si instalaste también C.7, sumale además sus 2 diffs (`revisar-pr.yml` y
+`ajustar-pr.yml`) al repo nuevo — `coordinador-vigilar.yml` ya cubre la
+Tarea 2 sin ningún archivo adicional.
 
 ## C.7 Incremento — el Coordinador también decide ajustes de PR (opcional)
 
@@ -2029,41 +2126,13 @@ hallazgos reales:
 +   ejecutando exactamente:
 ```
 
-### `.github/workflows/coordinador-avisar-ajuste.yml` (nuevo, cada repo de proyecto)
+### Nada nuevo que crear acá
 
-```yaml
-name: Avisar al Coordinador central de un ajuste pendiente
-
-on:
-  issue_comment:
-    types: [created]
-
-permissions:
-  contents: read
-  issues: write
-  pull-requests: write
-
-jobs:
-  avisar_coordinador:
-    if: >
-      github.event.issue.pull_request != null &&
-      github.event.comment.user.type == 'Bot' &&
-      contains(github.event.comment.body, '🧭 ESPERANDO_DECISION')
-    runs-on: ubuntu-latest
-    steps:
-      - name: 🧭 Avisar al Coordinador central vía API
-        run: |
-          RESPONSE=$(curl -s -X POST "https://api.anthropic.com/v1/claude_code/routines/${{ vars.ROUTINE_COORDINADOR_ID }}/fire" \
-            -H "Authorization: Bearer ${{ secrets.COORDINADOR_API_TOKEN }}" \
-            -H "anthropic-beta: experimental-cc-routine-2026-04-01" \
-            -H "anthropic-version: 2023-06-01" \
-            -H "Content-Type: application/json" \
-            -d "{\"text\": \"El PR #${{ github.event.issue.number }} de ${{ github.repository }} tiene hallazgos reales de revisión sin corregir, y ya se usó el intento automático de corrección. Repo completo: ${{ github.repository }}. Revisá el hilo del PR y decidí si pedís un ajuste más (con /ajustar) o si esto queda esperando una decisión humana.\"}")
-          echo "$RESPONSE"
-```
-
-Reusa `COORDINADOR_API_TOKEN`/`ROUTINE_COORDINADOR_ID` (C.4) — no hace
-falta ninguna Routine ni secret/variable nueva.
+`coordinador-vigilar.yml` (C.3) ya incluye el chequeo de Tarea 2 (PRs con
+la marca `🧭 ESPERANDO_DECISION`) desde el principio — simplemente no
+encontraba nada que avisar hasta que instalás C.7 y `revisar-pr.yml`
+empieza a agregar esa marca. No hace falta ningún workflow ni
+secret/variable nueva acá.
 
 ### Modificar `ajustar-pr.yml` (ya existe, de la Parte A)
 
@@ -2081,9 +2150,9 @@ el Coordinador pueda postear `/ajustar`:
 1. Editar `GH_TOKEN_COORDINADOR` (el mismo, no uno nuevo): agregar
    `Pull requests: Read and write`.
 2. Aplicar los dos diffs (`revisar-pr.yml`, `ajustar-pr.yml`) en cada
-   repo de proyecto.
-3. Agregar `coordinador-avisar-ajuste.yml` en cada repo de proyecto.
-4. Confirmar que la label `esperando-humano` ya existe (se creó en A.4)
+   repo de proyecto — no hace falta ningún workflow nuevo,
+   `coordinador-vigilar.yml` (C.3) ya cubre esta tarea.
+3. Confirmar que la label `esperando-humano` ya existe (se creó en A.4)
    — se reusa tal cual, no hace falta crear una nueva.
 
 ### Probar C.7

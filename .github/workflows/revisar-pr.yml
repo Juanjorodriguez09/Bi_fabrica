@@ -144,5 +144,20 @@ jobs:
             NO escribas código, NO corrijas nada tú mismo, NO abras otra rama ni PR —
             tu única salida es el comentario de revisión y, cuando corresponda, el
             disparo de la Routine de corrección.
+
+            ÚLTIMO PASO OBLIGATORIO, antes de terminar tu turno: este job de GitHub
+            Actions termina apenas vos terminás de responder — no hay ninguna otra
+            oportunidad de arreglarlo después, ni un humano revisando que lo hiciste
+            bien antes de que el job se marque "success". Un job que termina
+            "success" sin haber publicado el comentario (o sin haber disparado la
+            Routine cuando correspondía) es un fallo silencioso — nadie se entera,
+            porque GitHub solo ve que el proceso no crasheó. Por eso, literalmente en
+            tu último mensaje, confirmate a vos mismo con una lista explícita antes de
+            escribir tu respuesta final:
+            - ¿Ejecuté `gh pr comment` con el comentario consolidado completo? Si la
+              respuesta es "no" o "no estoy seguro" — ejecutalo ahora, no lo des por
+              hecho ni lo menciones como algo que "ibas a hacer".
+            - Si es Caso C, ¿ejecuté el `curl` de disparo? Mismo criterio: si no
+              estás seguro de haberlo corrido, correlo ahora antes de responder.
         env:
           FIX_PR_ROUTINE_API_TOKEN: ${{ secrets.FIX_PR_ROUTINE_API_TOKEN }}
