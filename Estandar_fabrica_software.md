@@ -866,6 +866,38 @@ jq -Rs '{body: .}' /tmp/decision.txt | GH_TOKEN="$GH_TOKEN_COORDINADOR" gh api "
 que arma el JSON explícitamente y no depende de que `gh` interprete el
 `@`.
 
+### 8.9 Dos gaps más encontrados en la misma ronda de pruebas (2026-09-22)
+
+**`revisar-pr.yml` puede reportar "success" sin cumplir lo pedido.**
+Confirmado en vivo dos veces sobre el mismo PR real (WebChat_Fabrica
+#28): (1) con un hallazgo etiquetado `REAL/CRÍTICO`, no disparó la
+corrección automática que le correspondía (Caso C); (2) en la
+re-revisión tras un `/ajustar`, ni siquiera publicó el comentario
+consolidado. En ambos casos el job de GitHub Actions terminó
+"success" — sin acceso a los logs detallados del step (bloqueados sin
+permisos de admin) no se pudo confirmar la causa exacta, pero el patrón
+coincide con el mismo tipo de fallo silencioso ya visto y corregido antes
+en `generar-asesoria.yml` (§ tanda de pruebas del 2026-09-10). **Fix
+aplicado en los dos repos y en `GUIA_INSTALACION_FABRICA.md`:** un
+checklist final explícito, obligando al modelo a confirmarse a sí mismo
+(antes de terminar el turno) que efectivamente ejecutó `gh pr comment` y,
+si correspondía, el `curl` de disparo — mismo principio que ya funcionó
+para el bug del `asesor`. Sin volver a confirmar en vivo si esto lo
+resuelve del todo; si vuelve a pasar, hace falta reforzarlo más.
+
+**`documentador.md` de `WebChat_Fabrica` tenía una regla contradictoria
+consigo misma.** Su punto 3 dice que debe crear secciones nuevas en el
+README para lo que el código ya tiene, aunque el cambio puntual no lo
+haya tocado — pero en la práctica (`revisar-pr.yml` lo invoca siempre en
+modo "solo diagnóstico, no apliques cambios") nunca llega a ejecutar esa
+regla como edición, así que la aplicaba mal: descartaba el hueco como
+"no genera divergencia nueva, fuera de alcance de este PR" en vez de
+señalarlo como recomendación. **Fix:** aclarado explícitamente que la
+regla 3 sigue aplicando en modo diagnóstico, solo que como recomendación
+en el reporte en vez de una edición directa. Aplicado en
+`WebChat_Fabrica` y en el meta-prompt de `GUIA_INSTALACION_FABRICA.md`
+(ítem 3 de A.3).
+
 ## 9. Modelo de IA según esfuerzo (2026-09-15)
 
 No es un ahorro de costo — es un upgrade selectivo de capacidad para el
