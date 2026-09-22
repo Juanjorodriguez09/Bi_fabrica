@@ -249,26 +249,41 @@ En orden — cada paso depende del anterior:
     - Agregar el paso 4.5 a las instrucciones de la Routine
       `implementar-plan-aprobado` de este repo (ver §8.1).
 11. **Armar los 3 ambientes (dev/preprod/prod) y el despliegue
-    automático** (agregado 2026-09-17/21, ver §10 para el detalle
+    automático** (agregado 2026-09-17/21/22, ver §10 para el detalle
     completo y los gotchas) — **estándar para todo proyecto nuevo, no
-    opcional**:
+    opcional. Es puro Git, hacerlo de una vez, aunque cPanel todavía no
+    esté armado — no depende de eso:**
+    - **Crear las ramas `pre` y `prod`** (GitHub → selector de ramas →
+      escribir el nombre → "Create branch: X from...") — `main` ya
+      existe siempre, `pre` se crea desde `main`, y **`prod` se crea
+      desde `pre`, nunca desde `main` directo**, para mantener la
+      cadena de promoción correcta. Sin esto, no hay dónde promover
+      nada — es el primer paso, antes que cualquier configuración de
+      cPanel.
     - Subdominios `dev.`/`preprod.` del dominio de la cuenta cPanel del
       proyecto (dev y preprod comparten cuenta; prod es una cuenta
       cPanel separada por proyecto).
     - Copiar `deploy-cpanel.yml` (backend Node) o su variante estática
       (frontend sin backend propio, ver §10) — nunca escribirlo desde
-      cero para un proyecto nuevo.
+      cero para un proyecto nuevo. Reconoce las 3 ramas solo: `push` a
+      `main`/`pre`/`prod` dispara el deploy al ambiente correspondiente.
     - Secret `CPANEL_SSH_PRIVATE_KEY` + variables `CPANEL_SSH_HOST`,
       `CPANEL_SSH_PORT`, `CPANEL_SSH_USER`, `CPANEL_PATH_DEV`,
-      `CPANEL_PATH_PREPROD` (mismos nombres en todo proyecto, así el
-      workflow no cambia).
+      `CPANEL_PATH_PREPROD` (dev/preprod, mismos nombres en todo
+      proyecto). Para producción, credenciales **separadas** (cuenta
+      cPanel distinta): secret `CPANEL_PROD_SSH_PRIVATE_KEY` + variables
+      `CPANEL_PROD_SSH_HOST`, `CPANEL_PROD_SSH_PORT`,
+      `CPANEL_PROD_SSH_USER`, `CPANEL_PROD_PATH` — quedan sin configurar
+      hasta que exista un cPanel de producción real para ese proyecto,
+      sin que eso rompa nada de dev/preprod mientras tanto.
     - Directory Privacy (contraseña) en dev/preprod desde el arranque
       si el proyecto tiene backend/base de datos real — no esperar a
       que un bot lo encuentre (ver §10).
     - **El merge sigue siendo, siempre, 100% manual** — esto solo
       automatiza el despliegue después de un merge ya hecho a mano, no
-      el merge en sí. `pre → prod` también sigue siendo manual, sin
-      excepción.
+      el merge en sí. La promoción entre ramas (`main → pre → prod`) es
+      un Pull Request más, igual de manual. `pre → prod` en particular
+      sigue siendo, a propósito, la frontera que nunca se automatiza.
 
 ## 3.1 Si el proyecto nuevo está en otra cuenta/organización de GitHub
 
