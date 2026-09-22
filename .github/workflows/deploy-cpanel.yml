@@ -1,14 +1,19 @@
-name: Deploy a cPanel (dev/preprod)
+name: Deploy a cPanel (dev/preprod/prod)
 
-# main -> dev.fabrica.micomercio.co
-# pre  -> preprod.fabrica.micomercio.co
-# pre -> prod sigue siendo 100% manual, esto no lo toca.
+# main -> dev.fabrica.micomercio.co       (cuenta cPanel de dev/preprod)
+# pre  -> preprod.fabrica.micomercio.co   (misma cuenta cPanel que dev)
+# prod -> cuenta cPanel de PRODUCCION, separada (una por proyecto)
+#
+# El merge a cada rama sigue siendo, siempre, 100% manual — esto solo
+# despliega automaticamente DESPUES de un merge ya hecho a mano, nunca
+# mergea nada por si solo.
 
 on:
   push:
     branches:
       - main
       - pre
+      - prod
 
 jobs:
   deploy:
@@ -25,36 +30,74 @@ jobs:
 
       # npm ci y prisma generate corren ACA (runner de GitHub, sin límite de
       # procesos ni de memoria) — nunca en el cPanel compartido. Ver gotcha
-      # E.4 y E.7 de GUIA_INSTALACION_FABRICA.md.
+      # E.4 y E.9 de GUIA_INSTALACION_FABRICA.md.
       - name: Install dependencies
         run: npm ci
 
       - name: Generate Prisma Client
         run: npx prisma generate
 
-      - name: Elegir carpeta destino según la rama
+      - name: Elegir credenciales y carpeta destino según la rama
         id: ambiente
         run: |
-          if [ "${{ github.ref_name }}" = "pre" ]; then
+          if [ "${{ github.ref_name }}" = "prod" ]; then
+            echo "host=${{ vars.CPANEL_PROD_SSH_HOST }}" >> "$GITHUB_OUTPUT"
+            echo "port=${{ vars.CPANEL_PROD_SSH_PORT }}" >> "$GITHUB_OUTPUT"
+            echo "user=${{ vars.CPANEL_PROD_SSH_USER }}" >> "$GITHUB_OUTPUT"
+            echo "target=${{ vars.CPANEL_PROD_PATH }}" >> "$GITHUB_OUTPUT"
+            echo "usa_secret_prod=true" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.ref_name }}" = "pre" ]; then
+            echo "host=${{ vars.CPANEL_SSH_HOST }}" >> "$GITHUB_OUTPUT"
+            echo "port=${{ vars.CPANEL_SSH_PORT }}" >> "$GITHUB_OUTPUT"
+            echo "user=${{ vars.CPANEL_SSH_USER }}" >> "$GITHUB_OUTPUT"
             echo "target=${{ vars.CPANEL_PATH_PREPROD }}" >> "$GITHUB_OUTPUT"
+            echo "usa_secret_prod=false" >> "$GITHUB_OUTPUT"
           else
+            echo "host=${{ vars.CPANEL_SSH_HOST }}" >> "$GITHUB_OUTPUT"
+            echo "port=${{ vars.CPANEL_SSH_PORT }}" >> "$GITHUB_OUTPUT"
+            echo "user=${{ vars.CPANEL_SSH_USER }}" >> "$GITHUB_OUTPUT"
             echo "target=${{ vars.CPANEL_PATH_DEV }}" >> "$GITHUB_OUTPUT"
+            echo "usa_secret_prod=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Deploy via rsync
+      # Producción usa una clave SSH propia (cuenta cPanel separada) —
+      # dev/preprod siguen usando CPANEL_SSH_PRIVATE_KEY como hasta ahora.
+      - name: Elegir clave SSH según la rama
+        id: clave
+        run: |
+          if [ "${{ github.ref_name }}" = "prod" ]; then
+            echo "usar=prod" >> "$GITHUB_OUTPUT"
+          else
+            echo "usar=dev_preprod" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Deploy via rsync (dev/preprod)
+        if: steps.clave.outputs.usar == 'dev_preprod'
         uses: easingthemes/ssh-deploy@v5.0.0
         env:
           SSH_PRIVATE_KEY: ${{ secrets.CPANEL_SSH_PRIVATE_KEY }}
-          REMOTE_HOST: ${{ vars.CPANEL_SSH_HOST }}
-          REMOTE_PORT: ${{ vars.CPANEL_SSH_PORT }}
-          REMOTE_USER: ${{ vars.CPANEL_SSH_USER }}
+          REMOTE_HOST: ${{ steps.ambiente.outputs.host }}
+          REMOTE_PORT: ${{ steps.ambiente.outputs.port }}
+          REMOTE_USER: ${{ steps.ambiente.outputs.user }}
           SOURCE: './'
           TARGET: ${{ steps.ambiente.outputs.target }}
-          # node_modules SI se sube (ya viene armado del paso de arriba) —
-          # a proposito no se usa --exclude-from=.gitignore, porque eso
-          # excluiria justo lo que queremos subir.
-          # .htaccess, tmp/ y stderr.log son del servidor, no del repo:
-          # excluirlos evita que --delete los borre (gotcha E.5).
+          ARGS: '-avz --delete'
+          EXCLUDE: '.git/, .github/, .htaccess, tmp/, stderr.log, .env'
+          SCRIPT_AFTER: |
+            cd ${{ steps.ambiente.outputs.target }}
+            mkdir -p tmp
+            touch tmp/restart.txt
+
+      - name: Deploy via rsync (producción)
+        if: steps.clave.outputs.usar == 'prod'
+        uses: easingthemes/ssh-deploy@v5.0.0
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.CPANEL_PROD_SSH_PRIVATE_KEY }}
+          REMOTE_HOST: ${{ steps.ambiente.outputs.host }}
+          REMOTE_PORT: ${{ steps.ambiente.outputs.port }}
+          REMOTE_USER: ${{ steps.ambiente.outputs.user }}
+          SOURCE: './'
+          TARGET: ${{ steps.ambiente.outputs.target }}
           ARGS: '-avz --delete'
           EXCLUDE: '.git/, .github/, .htaccess, tmp/, stderr.log, .env'
           SCRIPT_AFTER: |
