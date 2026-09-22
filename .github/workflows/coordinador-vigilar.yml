@@ -1,0 +1,72 @@
+name: Vigilar planes/PRs estancados y avisar al Coordinador
+
+# Reemplaza el disparo instantáneo anterior (los extintos
+# coordinador-avisar-plan.yml / coordinador-avisar-ajuste.yml, que
+# reaccionaban al instante al evento issue_comment). El Coordinador central
+# es un respaldo para cuando el humano no actúa, no una carrera contra él —
+# por eso este chequeo corre cada 15 min y solo avisa al Coordinador si un
+# plan o un PR llevan 20+ min sin respuesta humana. Ver
+# Estandar_fabrica_software.md (sección del Coordinador) para el porqué.
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+
+jobs:
+  vigilar:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+      COORDINADOR_API_TOKEN: ${{ secrets.COORDINADOR_API_TOKEN }}
+      ROUTINE_COORDINADOR_ID: ${{ vars.ROUTINE_COORDINADOR_ID }}
+    steps:
+      - name: Revisar Issues con plan sin aprobar (Tarea 1) y PRs esperando decisión (Tarea 2)
+        run: |
+          set -euo pipefail
+          GRACIA_SEGUNDOS=$((20 * 60))
+          AHORA=$(date -u +%s)
+
+          avisar_coordinador() {
+            local texto="$1"
+            curl -s -X POST "https://api.anthropic.com/v1/claude_code/routines/${ROUTINE_COORDINADOR_ID}/fire" \
+              -H "Authorization: Bearer ${COORDINADOR_API_TOKEN}" \
+              -H "anthropic-beta: experimental-cc-routine-2026-04-01" \
+              -H "anthropic-version: 2023-06-01" \
+              -H "Content-Type: application/json" \
+              -d "$(jq -n --arg text "$texto" '{text: $text}')"
+            echo
+          }
+
+          echo "== Tarea 1: Issues con plan sin aprobar =="
+          for numero in $(gh api "repos/${REPO}/issues?state=open&per_page=100" --jq '.[] | select(.pull_request == null) | .number'); do
+            ULTIMO=$(gh api "repos/${REPO}/issues/${numero}/comments?per_page=100" --jq 'last')
+            [ "$ULTIMO" = "null" ] && continue
+            ES_BOT=$(echo "$ULTIMO" | jq -r '.user.type == "Bot"')
+            TIENE_PLAN=$(echo "$ULTIMO" | jq -r '.body | contains("## Objetivo")')
+            ES_APROBACION=$(echo "$ULTIMO" | jq -r '.body | startswith("/aprobar")')
+            CREADO_EPOCH=$(date -u -d "$(echo "$ULTIMO" | jq -r '.created_at')" +%s)
+            if [ "$ES_BOT" = "true" ] && [ "$TIENE_PLAN" = "true" ] && [ "$ES_APROBACION" = "false" ] && [ $((AHORA - CREADO_EPOCH)) -ge "$GRACIA_SEGUNDOS" ]; then
+              echo "Issue #${numero}: plan sin aprobar hace más de 20 min — avisando al Coordinador"
+              avisar_coordinador "Hay un plan nuevo para revisar en el Issue #${numero} de ${REPO}. Repo completo: ${REPO}. Revisalo y decidí si aprobarlo, resolviendo cualquier pregunta abierta que tenga."
+            fi
+          done
+
+          echo "== Tarea 2: PRs esperando decisión de ajuste =="
+          for numero in $(gh api "repos/${REPO}/pulls?state=open&per_page=100" --jq '.[].number'); do
+            ULTIMO=$(gh api "repos/${REPO}/issues/${numero}/comments?per_page=100" --jq 'last')
+            [ "$ULTIMO" = "null" ] && continue
+            ES_BOT=$(echo "$ULTIMO" | jq -r '.user.type == "Bot"')
+            ESPERANDO=$(echo "$ULTIMO" | jq -r '.body | contains("🧭 ESPERANDO_DECISION")')
+            CREADO_EPOCH=$(date -u -d "$(echo "$ULTIMO" | jq -r '.created_at')" +%s)
+            if [ "$ES_BOT" = "true" ] && [ "$ESPERANDO" = "true" ] && [ $((AHORA - CREADO_EPOCH)) -ge "$GRACIA_SEGUNDOS" ]; then
+              echo "PR #${numero}: esperando decisión hace más de 20 min — avisando al Coordinador"
+              avisar_coordinador "El PR #${numero} de ${REPO} tiene hallazgos reales de revisión sin corregir, y ya se usó el intento automático de corrección. Repo completo: ${REPO}. Revisá el hilo del PR y decidí si pedís un ajuste más (con /ajustar) o si esto queda esperando una decisión humana."
+            fi
+          done
