@@ -17,7 +17,8 @@ siempre lo hace un humano, nunca es automático**.
 
 - Una cuenta de GitHub con permisos de administrador sobre el/los
   repo(s) que querés meter a la fábrica (para crear secrets, variables,
-  labels, instalar la GitHub App).
+  labels, instalar la GitHub App). Si el proyecto todavía no tiene ni
+  repo ni organización, ver Parte 0 primero.
 - Una suscripción a Claude Code (plan Pro o Max) — de ahí sale el token
   que usan los workflows para invocar a Claude.
 - Acceso a `claude.ai/code` para crear "Environments" (entornos en la
@@ -27,6 +28,11 @@ siempre lo hace un humano, nunca es automático**.
 
 ## Cómo está organizada esta guía
 
+- **Parte 0** — solo si el proyecto es código real que ya corre en
+  producción pero **todavía no está en Git**, y/o todavía no existe una
+  organización de GitHub para la empresa. Hacé esto una sola vez (la
+  organización) más una vez por cada proyecto existente que subas.
+  Si el repo ya existe en GitHub, salteala — empezá directo en la Parte A.
 - **Parte A** — instala el pipeline de desarrollo en **un** proyecto
   (Issue → plan → aprobación humana → desarrollo → revisión → PR).
   Repetí esta parte una vez por cada repo que quieras sumar a la
@@ -52,6 +58,171 @@ siempre lo hace un humano, nunca es automático**.
 Cada parte de la B a la E es independiente y opcional — instalá solo las
 que te interesen, en cualquier orden, siempre que la Parte A del
 proyecto correspondiente ya exista.
+
+---
+
+# PARTE 0 — Preparar un proyecto real que todavía no está en Git
+
+Este es el caso de arrancar con código que **ya corre en producción**
+(en un cPanel de la empresa, por ejemplo) pero que nunca pasó por
+control de versiones. Es más delicado que las demás partes porque hay
+algo real funcionando que no se puede romper — leé todo antes de
+ejecutar el primer comando.
+
+## 0.1 Crear la organización de GitHub (una sola vez, no por proyecto)
+
+1. Con la cuenta de GitHub que va a ser la dueña (normalmente la del
+   jefe, o una cuenta nueva dedicada a la empresa — decidilo antes, es
+   difícil de cambiar después): `github.com/account/organizations/new`.
+2. Elegí el plan **Free** para arrancar (alcanza para todo lo de esta
+   guía — repos privados ilimitados, Actions con minutos gratis de
+   sobra para este volumen). Se puede subir de plan después sin
+   perder nada.
+3. Nombre de la organización: algo estable, no vas a querer cambiarlo
+   (cambia la URL de todos los repos). Ej. `micomercio` o `MiComercioIO`
+   si el nombre corto ya está tomado.
+4. **Settings → People → Invite member** para sumar a cada persona que
+   necesite acceso (el jefe, vos, cualquier otro dev) — decidí el rol
+   (`Owner` puede administrar la organización entera, `Member` solo ve
+   los repos a los que lo agreguen) antes de invitar a todos como
+   `Owner` por comodidad.
+5. Los tokens/PATs de las Partes A-D (`GH_TOKEN_FABRICA`,
+   `GH_TOKEN_COORDINADOR`, etc.) se crean igual que siempre (fine-grained,
+   personales), solo que ahora apuntan a repos **dentro de la
+   organización** en vez de una cuenta personal — no cambia nada del
+   resto de la guía.
+
+## 0.2 Antes de tocar código: decidí público o privado, y quién tiene acceso
+
+Casi seguro **privado** para código real de la empresa — un repo público
+expone lógica de negocio y, si hay algún secreto commiteado por error
+(ver 0.3), lo expone también. Confirmalo con el jefe si hay dudas, no lo
+asumas.
+
+## 0.3 Subir el código existente a Git por primera vez, sin tocar lo que está en producción
+
+**Punto clave para tranquilizarte antes de empezar: `git init` y los
+comandos de Git que siguen no tocan absolutamente nada de lo que el
+servidor está sirviendo ahora mismo.** Git solo empieza a *observar* la
+carpeta y guardar una copia versionada — el sitio en vivo sigue
+funcionando exactamente igual durante todo este proceso, hasta que en el
+futuro decidas conectar un despliegue automático (Parte E), que es un
+paso aparte y explícito.
+
+1. **Conseguí una copia completa del código real** — la forma exacta
+   depende de cómo esté hosteado hoy: descarga por File Manager de
+   cPanel (comprimir la carpeta en un `.zip` y bajarlo), FTP, o SSH si
+   el hosting lo permite. Trabajá sobre esa copia (o directo por SSH en
+   el servidor si tenés acceso — ambas formas funcionan, la clave es el
+   orden de los pasos siguientes, no dónde los corrés).
+
+2. **Escribí el `.gitignore` ANTES de cualquier `git add`.** Este es el
+   paso que evita el error más común y más grave de esta migración —
+   commitear secretos reales sin darte cuenta. Como mínimo, para
+   cualquier stack:
+   ```
+   .env
+   .env.*
+   node_modules/
+   vendor/
+   *.log
+   storage/
+   /tmp
+   ```
+   Ajustá según el stack real (Laravel: `storage/`, `bootstrap/cache/`;
+   Node: `node_modules/`; WordPress: `wp-config.php` si tiene
+   credenciales hardcodeadas, `uploads/` si son archivos de usuario
+   pesados que no tiene sentido versionar). Si no estás seguro de qué
+   stack tiene un proyecto puntual, mirá qué archivos de configuración
+   existen antes de decidir el `.gitignore`.
+
+3. **Antes del primer commit, buscá secretos a mano** en los archivos
+   que SÍ vas a versionar — contraseñas de base de datos, API keys,
+   tokens, hardcodeados directo en el código (no en `.env`). Un
+   `grep -riE "password|secret|api_key|token" --include=*.php --include=*.js .`
+   (ajustá las extensiones al stack) no es perfecto pero encuentra la
+   mayoría de los casos obvios. Ya nos pasó en un piloto de esta fábrica
+   (`WebChat_Fabrica`) que un `.env` real quedó commiteado en el repo
+   original — es exactamente el error que este paso previene.
+
+4. **Recién ahora, `git init` y el primer commit:**
+   ```bash
+   git init
+   git add .
+   git status   # revisá la lista completa ANTES del commit — es tu última
+                # oportunidad barata de corregir el .gitignore si algo
+                # que no debería estar ahí aparece listado
+   git commit -m "Primer commit: código existente de <proyecto>"
+   ```
+   **Por qué este orden importa tanto:** este es el único momento en
+   toda la vida del repo donde, si algo se te escapó, corregirlo es
+   gratis (todavía no hay historial que limpiar, todavía no se pusheó a
+   ningún lado). Una vez que empujás a GitHub, un secreto commiteado por
+   error queda en el historial para siempre aunque borres el archivo en
+   un commit posterior — hay que rotar la credencial real, no alcanza
+   con borrar el archivo.
+
+5. **Creá el repo (privado) dentro de la organización** —
+   `github.com/organizations/<org>/repositories/new` — vacío, sin
+   README/`.gitignore`/licencia (ya los tenés localmente).
+
+6. **Conectá y empujá:**
+   ```bash
+   git remote add origin https://github.com/<org>/<repo>.git
+   git branch -M main
+   git push -u origin main
+   ```
+
+7. **Confirmá que el sitio en vivo sigue exactamente igual** —
+   recargalo en el navegador. No debería haber ningún cambio visible,
+   porque ninguno de los pasos de arriba tocó los archivos que el
+   servidor realmente sirve (trabajaste sobre una copia, o sobre el
+   original pero sin borrar/mover nada, solo agregando la carpeta
+   `.git/`).
+
+**Si el proyecto usa un framework con `.git` potencialmente accesible
+por URL:** en Apache/cPanel, una carpeta `.git/` dentro del document
+root público es servible por HTTP a menos que algo la bloquee — si
+hiciste el `git init` directo en el servidor (no en una copia aparte),
+agregá una regla en `.htaccess` bloqueando el acceso a `.git/` antes de
+darlo por terminado, o (mejor) hacé el `git init` en una carpeta fuera
+del document root y solo copiá el código servible ahí.
+
+## 0.4 Inventariar el hosting real que ya tiene el proyecto (antes de la Parte E)
+
+Antes de intentar mapear el proyecto al modelo de 3 ambientes
+(main/pre/prod) de la fábrica, anotá lo que ya existe hoy — no asumas
+que hay que construir todo desde cero, capaz que la producción ya está
+resuelta y solo falta agregar dev/preprod al lado:
+
+- ¿Qué cuenta de cPanel sirve la producción hoy, y cuál es la carpeta
+  exacta (document root)?
+- ¿Ya existe algún ambiente de pruebas separado (subdominio `dev.`/
+  `staging.`/`test.`), o todo lo que existe es la producción?
+- ¿La base de datos de producción es accesible para crear una copia de
+  desarrollo, o hace falta pedir un dump aparte?
+
+**Recomendación fuerte: NO conectes `deploy-cpanel.yml` directo a la
+carpeta de producción real como primer paso.** Construí primero
+dev/preprod en una carpeta y subdominio nuevos (Parte E, que asume
+justamente esto: partir de cero) y validá el pipeline completo ahí
+—recién cuando estés seguro de que todo funciona bien, coordiná con el
+jefe un momento de bajo tráfico para conectar por primera vez el
+despliegue automático a la carpeta de producción real que ya está
+sirviendo tráfico.
+
+## 0.5 Checklist antes de pasar a la Parte A
+
+- [ ] Organización de GitHub creada, con el jefe (y quien más
+      corresponda) invitado.
+- [ ] Repo privado del proyecto creado dentro de la organización, con el
+      código real ya pusheado a `main`.
+- [ ] Confirmado que ningún secreto real quedó commiteado (si algo se
+      escapó, rotá esa credencial ahora, no lo dejes para después).
+- [ ] Confirmado que el sitio en producción sigue funcionando exactamente
+      igual que antes de este proceso.
+- [ ] Inventario de hosting actual del proyecto (0.4) anotado en algún
+      lado, para tenerlo a mano cuando llegues a la Parte E.
 
 ---
 
