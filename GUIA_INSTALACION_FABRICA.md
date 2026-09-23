@@ -2808,22 +2808,19 @@ phpPgAdmin: `SELECT state, count(*) FROM pg_stat_activity GROUP BY
 state;`) que no sean conexiones de Postgres colgadas — es una causa
 distinta con el mismo síntoma, y confundir las dos hace perder tiempo.
 
-## E.10 Despliegue automático — diseñado (2026-09-17), sin probar en vivo todavía
+## E.10 Despliegue automático — confirmado en vivo (2026-09-22)
 
 `.github/workflows/deploy-cpanel.yml` (reemplaza cualquier workflow viejo
 apuntando a otra infra, ej. Contabo/pm2, que ya no aplica): dispara con
-`push` a `main` (→ dev) o `pre` (→ preprod), nunca mergea nada — el merge
-sigue siendo 100% manual, esto solo actúa después de que ya se mergeó.
+`push` a `main` (→ dev), `pre` (→ preprod) o `prod` (→ producción real),
+nunca mergea nada — el merge sigue siendo 100% manual, esto solo actúa
+después de que ya se mergeó.
 
 **Decisión de diseño clave, a partir del incidente de E.7:** `npm ci` y
 `npx prisma generate` corren en el runner de GitHub Actions (sin límite
 de procesos ni de memoria), nunca en el cPanel compartido — el `rsync`
-sube `node_modules` ya armado. El servidor no vuelve a correr una
-instalación de dependencias ni el generate de Prisma en el flujo
-automático, lo que reduce el riesgo de repetir el bloqueo de procesos.
-Usa la acción `easingthemes/ssh-deploy` (ya estaba probada en el
-workflow viejo, action real y mantenida, no un endpoint de cPanel sin
-confirmar).
+sube `node_modules` ya armado. Usa la acción `easingthemes/ssh-deploy`
+(mantenida, no un endpoint de cPanel sin confirmar).
 
 **Gotcha evitado antes de que pase, no encontrado en vivo:** el rsync
 usa `--delete` para mantener el servidor igual al repo — sin excluir
@@ -2832,29 +2829,57 @@ en el repo de Git), repitiendo el gotcha de E.5. El `EXCLUDE` del
 workflow protege `.htaccess`, `tmp/` y `stderr.log` explícitamente.
 
 El restart de la app después del deploy es **tocar `tmp/restart.txt`**
-(mecanismo nativo de Phusion Passenger, el motor que usa "Setup
-Node.js App" — confirmado por las directivas `Passenger*` que ya vimos
-en el `.htaccess`), no hace falta ningún botón de la UI ni SSH aparte.
+(mecanismo nativo de Phusion Passenger), no hace falta ningún botón de
+la UI ni SSH aparte.
 
-**Secrets/variables nuevos a crear por repo** (Settings → Secrets and
-variables → Actions):
-- Secret `CPANEL_SSH_PRIVATE_KEY` — la clave privada ya autorizada en
-  la cuenta (ver E.3/gotcha de clave SSH).
-- Variables (no secrets, no son sensibles): `CPANEL_SSH_HOST`,
-  `CPANEL_SSH_PORT`, `CPANEL_SSH_USER`, `CPANEL_PATH_DEV`,
-  `CPANEL_PATH_PREPROD`.
+**Producción es una cuenta cPanel separada** (una por proyecto, nunca
+comparte cuenta con dev/preprod) — usa su propio set de credenciales,
+elegido por rama dentro del mismo workflow (`if github.ref_name == 'prod'`).
 
-**Sin probar en vivo todavía** — depende de que el cPanel esté
-disponible (ver E.7, bloqueado por el límite de procesos al
-2026-09-17). Primera prueba real: push chico a `main` después de que
-se confirme que dev responde manualmente.
+**Verificación automática post-deploy (confirmada útil en vivo,
+2026-09-22):** después de cada deploy, un paso nuevo hace `curl` contra
+la URL real del ambiente, con reintentos (el restart de Passenger tarda
+unos segundos) — si no responde `200`, el job falla y avisa, en vez de
+asumir en silencio que el deploy salió bien. No reemplaza la
+verificación visual/UX (sigue siendo manual, ver la nota de la sección
+principal sobre esto), pero sí atrapa el caso "el deploy rompió algo
+obvio y nadie se dio cuenta".
+
+**Secrets/variables a crear por repo** (Settings → Secrets and
+variables → Actions — ojo, Secrets y Variables son dos pestañas
+distintas):
+
+Secrets:
+- `CPANEL_SSH_PRIVATE_KEY` — clave privada de dev/preprod (ver E.3).
+- `CPANEL_PROD_SSH_PRIVATE_KEY` — clave privada de la cuenta de
+  producción, **separada** de la de arriba.
+
+Variables (no son sensibles, pero igual van en Variables, no en
+Secrets, para poder leerlas en los logs si hace falta debuggear):
+- `CPANEL_SSH_HOST`, `CPANEL_SSH_PORT`, `CPANEL_SSH_USER`,
+  `CPANEL_PATH_DEV`, `CPANEL_PATH_PREPROD` — dev/preprod.
+- `CPANEL_PROD_SSH_HOST`, `CPANEL_PROD_SSH_PORT`,
+  `CPANEL_PROD_SSH_USER`, `CPANEL_PROD_PATH` — producción.
+- `SITE_URL_DEV`, `SITE_URL_PREPROD`, `SITE_URL_PROD` — la URL pública
+  completa de cada ambiente (ej. `https://dev.tuproyecto.com`), para el
+  chequeo automático post-deploy. Si no las configurás, ese paso se
+  salta con un aviso en vez de fallar — no es obligatorio, pero sin
+  esto no hay ninguna verificación automática del deploy.
+
+**Confirmado en vivo:** la mecánica de elegir credenciales/carpeta según
+la rama, y de saltar el job de producción cuando no corresponde (y
+viceversa), funciona sin mezclar ambientes. La verificación HTTP
+post-deploy todavía no se confirmó contra un cPanel real con las
+variables `SITE_URL_*` configuradas — se agregó recién, probarla es
+parte de la primera instalación real.
 
 ## E.11 Qué falta (no cubierto todavía en esta parte)
 
-- **El merge `pre → prod`** — sigue siendo, a propósito, 100% manual
-  (mismo principio de toda esta guía), y el cPanel de producción
-  (separado por proyecto, ver arriba) todavía no se instaló en ningún
-  proyecto real.
+- El cPanel de producción real todavía no se instaló de punta a punta en
+  ningún proyecto — la mecánica de Git/Actions está confirmada, la
+  infraestructura real detrás de `prod`, no.
+- La verificación HTTP post-deploy (arriba) es nueva, sin confirmar
+  contra un cPanel real todavía.
 
 ---
 
