@@ -5,8 +5,11 @@
 > estructurado → aprobación → desarrollo → push → revisión por agentes →
 > feedback → notificación) contra lo que **ya existe y está probado en este
 > repo**, según evidencia real (commits, archivos, `feedback.md`). Complementa
-> a `Contexto_fabrica_software.md`, que sigue siendo la referencia de
-> decisiones de arquitectura tomadas para la fábrica en general.
+> a `Contexto_fabrica_software.md` (movido a `fabrica-status` el
+> 2026-09-23, ver `DOCUMENTACION_FABRICA_MOVIDA.md`), que sigue siendo la
+> referencia de decisiones de arquitectura tomadas para la fábrica en
+> general. Este Roadmap se queda acá a propósito — es la bitácora de
+> este piloto puntual, no de la fábrica en general.
 
 ## 1. Mapa de estado por paso del flujo
 
