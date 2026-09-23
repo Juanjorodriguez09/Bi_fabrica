@@ -6,7 +6,7 @@ name: Vigilar planes/PRs estancados y avisar al Coordinador
 # es un respaldo para cuando el humano no actúa, no una carrera contra él —
 # por eso este chequeo corre cada 15 min y solo avisa al Coordinador si un
 # plan o un PR llevan 20+ min sin respuesta humana. Ver
-# Estandar_fabrica_software.md (sección del Coordinador) para el porqué.
+# Estandar_fabrica_software.md (en fabrica-status, sección del Coordinador) para el porqué.
 
 on:
   schedule:

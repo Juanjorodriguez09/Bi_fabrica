@@ -30,7 +30,7 @@ jobs:
 
       # npm ci y prisma generate corren ACA (runner de GitHub, sin límite de
       # procesos ni de memoria) — nunca en el cPanel compartido. Ver gotcha
-      # E.4 y E.9 de GUIA_INSTALACION_FABRICA.md.
+      # E.4 y E.9 de GUIA_INSTALACION_FABRICA.md (en fabrica-status).
       - name: Install dependencies
         run: npm ci
 
