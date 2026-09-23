@@ -46,18 +46,21 @@ jobs:
             echo "user=${{ vars.CPANEL_PROD_SSH_USER }}" >> "$GITHUB_OUTPUT"
             echo "target=${{ vars.CPANEL_PROD_PATH }}" >> "$GITHUB_OUTPUT"
             echo "usa_secret_prod=true" >> "$GITHUB_OUTPUT"
+            echo "url=${{ vars.SITE_URL_PROD }}" >> "$GITHUB_OUTPUT"
           elif [ "${{ github.ref_name }}" = "pre" ]; then
             echo "host=${{ vars.CPANEL_SSH_HOST }}" >> "$GITHUB_OUTPUT"
             echo "port=${{ vars.CPANEL_SSH_PORT }}" >> "$GITHUB_OUTPUT"
             echo "user=${{ vars.CPANEL_SSH_USER }}" >> "$GITHUB_OUTPUT"
             echo "target=${{ vars.CPANEL_PATH_PREPROD }}" >> "$GITHUB_OUTPUT"
             echo "usa_secret_prod=false" >> "$GITHUB_OUTPUT"
+            echo "url=${{ vars.SITE_URL_PREPROD }}" >> "$GITHUB_OUTPUT"
           else
             echo "host=${{ vars.CPANEL_SSH_HOST }}" >> "$GITHUB_OUTPUT"
             echo "port=${{ vars.CPANEL_SSH_PORT }}" >> "$GITHUB_OUTPUT"
             echo "user=${{ vars.CPANEL_SSH_USER }}" >> "$GITHUB_OUTPUT"
             echo "target=${{ vars.CPANEL_PATH_DEV }}" >> "$GITHUB_OUTPUT"
             echo "usa_secret_prod=false" >> "$GITHUB_OUTPUT"
+            echo "url=${{ vars.SITE_URL_DEV }}" >> "$GITHUB_OUTPUT"
           fi
 
       # Producción usa una clave SSH propia (cuenta cPanel separada) —
@@ -88,6 +91,28 @@ jobs:
             mkdir -p tmp
             touch tmp/restart.txt
 
+      - name: Verificar que el sitio responde (dev/preprod)
+        if: steps.clave.outputs.usar == 'dev_preprod'
+        run: |
+          URL="${{ steps.ambiente.outputs.url }}"
+          if [ -z "$URL" ]; then
+            echo "⚠️ No hay variable SITE_URL_DEV/SITE_URL_PREPROD configurada — se salta la verificación."
+            exit 0
+          fi
+          # El touch de tmp/restart.txt tarda unos segundos en reiniciar la
+          # app (Passenger) — reintenta antes de declarar fallo real.
+          for intento in 1 2 3 4 5 6; do
+            CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$URL" || echo "000")
+            if [ "$CODE" = "200" ]; then
+              echo "✅ $URL respondió 200 (intento $intento)"
+              exit 0
+            fi
+            echo "Intento $intento: $URL respondió $CODE, reintentando en 10s..."
+            sleep 10
+          done
+          echo "❌ $URL no respondió 200 después de 6 intentos — el deploy pudo haber roto el sitio."
+          exit 1
+
       - name: Deploy via rsync (producción)
         if: steps.clave.outputs.usar == 'prod'
         uses: easingthemes/ssh-deploy@v5.0.0
@@ -104,3 +129,23 @@ jobs:
             cd ${{ steps.ambiente.outputs.target }}
             mkdir -p tmp
             touch tmp/restart.txt
+
+      - name: Verificar que el sitio responde (producción)
+        if: steps.clave.outputs.usar == 'prod'
+        run: |
+          URL="${{ steps.ambiente.outputs.url }}"
+          if [ -z "$URL" ]; then
+            echo "⚠️ No hay variable SITE_URL_PROD configurada — se salta la verificación."
+            exit 0
+          fi
+          for intento in 1 2 3 4 5 6; do
+            CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$URL" || echo "000")
+            if [ "$CODE" = "200" ]; then
+              echo "✅ $URL respondió 200 (intento $intento)"
+              exit 0
+            fi
+            echo "Intento $intento: $URL respondió $CODE, reintentando en 10s..."
+            sleep 10
+          done
+          echo "❌ $URL no respondió 200 después de 6 intentos — el deploy pudo haber roto producción, revisar YA."
+          exit 1
