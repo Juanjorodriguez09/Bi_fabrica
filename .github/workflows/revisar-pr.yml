@@ -14,6 +14,22 @@ jobs:
   revisar_pr:
     if: startsWith(github.head_ref, 'claude/')
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: micomercio
+          POSTGRES_PASSWORD: micomercio_local_dev
+          POSTGRES_DB: micomercio_local
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U micomercio -d micomercio_local"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://micomercio:micomercio_local_dev@localhost:5433/micomercio_local?schema=public
     steps:
       - name: 🚚 Checkout Code
         uses: actions/checkout@v4
@@ -27,6 +43,31 @@ jobs:
         run: |
           gh pr diff ${{ github.event.pull_request.number }} --repo ${{ github.repository }} > pr-diff.txt
           echo "Líneas del diff: $(wc -l < pr-diff.txt)"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Correr la suite de tests del proyecto (Capa 1, con Postgres real vía service container)
+        id: tests
+        continue-on-error: true
+        run: |
+          npm ci
+          npx prisma generate
+          # Service container arranca vacío, sin migraciones versionadas (ver
+          # CLAUDE.md/DOCUMENTACION_TECNICA.md) — db push sincroniza el schema
+          # directo desde prisma/schema.prisma, sin necesitar migraciones.
+          npx prisma db push --skip-generate
+          if node -e "process.exit(require('./package.json').scripts?.test ? 0 : 1)" 2>/dev/null; then
+            npm test > test-output.txt 2>&1
+            echo "resultado=$?" >> "$GITHUB_OUTPUT"
+          else
+            echo "Este proyecto todavía no tiene un script \"test\" configurado en package.json." > test-output.txt
+            echo "resultado=sin_tests" >> "$GITHUB_OUTPUT"
+          fi
+          cat test-output.txt
 
       - name: 🔍 Revisión con subagentes
         uses: anthropics/claude-code-action@v1
@@ -51,11 +92,21 @@ jobs:
             herramienta Read antes de continuar. NO ejecutes `gh pr diff`, `git diff`
             ni ningún otro comando para volver a obtenerlo, ya lo tienes.
 
+            El resultado REAL de correr la suite de tests del proyecto (si tiene una
+            configurada) ya está en test-output.txt, en la raíz de este checkout —
+            léelo también. El resultado del step se llama "tests", su output
+            "resultado" vale "sin_tests" (el proyecto no tiene script de test
+            todavía, no es un fallo), "0" (todos los tests pasaron), o cualquier otro
+            número (al menos un test falló — REAL/CRÍTICO automático, sin necesidad
+            de que vos lo evalúes: un test que falla es un hecho objetivo, no una
+            opinión).
+
             Corre estos tres subagentes de proyecto sobre ese diff, usando la
             herramienta Task con el `subagent_type` exacto (ya están definidos en
             .claude/agents/ de este repo, invócalos directamente):
 
-            1. `revisor-codigo` — revisión de calidad del diff.
+            1. `revisor-codigo` — revisión de calidad del diff, incluyendo el
+               resultado real de test-output.txt como evidencia.
             2. `validador-metricas` — solo si el diff toca dashboard.service.js o
                cambia algún cálculo/query; si es puramente frontend, igual invócalo
                pero dile que confirme que no aplica en vez de omitirlo.
@@ -63,18 +114,21 @@ jobs:
                actualizarse (dile explícitamente que NO aplique ningún cambio, solo
                diagnostique).
 
-            NO invoques `tester` — no hay servidor local disponible en este entorno
-            cloud.
+            NO invoques `tester` acá — necesita el servidor completo corriendo, no
+            solo la base de datos. Esa verificación es otra capa aparte, pendiente de
+            conectar post-deploy (Parte E).
 
-            IMPORTANTE — no intentes verificar nada corriendo servicios: este entorno
-            de GitHub Actions NO tiene Docker, Postgres, ni el servidor de la app
-            corriendo, y nunca los va a tener. NO intentes `docker compose up`, `psql`,
-            levantar el servidor, ni ningún comando para "probar" el cambio en
-            ejecución — ninguno de esos comandos está autorizado y vas a perder tiempo
-            del job entero chocando contra el muro de aprobación sin que nadie pueda
-            aprobarlo. Tu única fuente de verdad es la lectura estática del código en
-            pr-diff.txt y el resto del checkout — toda la revisión se hace por lectura,
-            nunca por ejecución.
+            IMPORTANTE sobre los límites reales de este entorno: este job SÍ tiene
+            una base de datos Postgres real disponible (`DATABASE_URL` ya apunta a
+            ella, con el schema ya sincronizado vía `prisma db push` antes de correr
+            los tests) — por eso el step de tests de arriba puede ejecutar queries
+            reales. Lo que NO tiene es el servidor Express corriendo ni datos
+            preexistentes más allá del schema vacío — así que un test que dependa de
+            filas específicas ya cargadas, o de pegarle a un endpoint HTTP real, va a
+            fallar acá por eso, no por un bug de código; si ves ese patrón en
+            test-output.txt, señalalo como limitación del entorno de este job, no
+            como hallazgo de calidad. Fuera de eso, tu fuente de verdad es
+            pr-diff.txt y test-output.txt — no inventes resultados que no estén ahí.
 
             IMPORTANTE sobre cómo invocar cada subagente: este es un job de GitHub
             Actions de un solo turno, sin sesión interactiva después — NO existe un
