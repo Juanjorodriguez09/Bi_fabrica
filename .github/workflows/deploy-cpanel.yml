@@ -15,6 +15,10 @@ on:
       - pre
       - prod
 
+permissions:
+  contents: read
+  issues: write
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -112,6 +116,28 @@ jobs:
           done
           echo "❌ $URL no respondió 200 después de 6 intentos — el deploy pudo haber roto el sitio."
           exit 1
+
+      - name: 🧪 Verificación funcional contra el ambiente real (Capa 2, tester)
+        if: steps.clave.outputs.usar == 'dev_preprod'
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            El deploy a ${{ github.ref_name }} ya se confirmó arriba (respondió 200).
+            Invocá el subagente `tester` (herramienta Task, subagent_type: tester,
+            definido en .claude/agents/tester.md de este repo) contra la URL real:
+            ${{ steps.ambiente.outputs.url }}
+
+            Podés pegarle por HTTP de verdad a esa URL (curl, fetch, lo que el
+            tester necesite) — este runner tiene acceso real a internet, a
+            diferencia de las Routines en la nube.
+
+            Si encontrás algo real y roto, dejalo documentado en un Issue nuevo con
+            `gh issue create --repo ${{ github.repository }} --title "<resumen>"
+            --label "esperando-humano"` — no lo arregles vos acá, esto es solo
+            verificación, no corrección.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Deploy via rsync (producción)
         if: steps.clave.outputs.usar == 'prod'
